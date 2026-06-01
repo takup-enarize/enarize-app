@@ -779,7 +779,7 @@ export default function App() {
 
       {showAddPayGroup&&(
         <Modal onClose={()=>setShowAddPayGroup(false)} title="💴 給料グループを追加" color="#f59e0b">
-          <Label>グループ名</Label><LInput value={pgForm.name} onChange={v=>setPgForm(f=>({...f,name:v}))} placeholder="例：ビックカメラ"/>
+          <Label>グループ名</Label><LInput value={pgForm.name} onChange={v=>setPgForm(f=>({...f,name:v}))} placeholder="例：ジムA・施設B"/>
           <Label>給料日（0=月末）</Label><LInput type="number" value={pgForm.payDay} onChange={v=>setPgForm(f=>({...f,payDay:v}))} placeholder="例：25"/>
           <Label>対象レッスン（複数選択可）</Label>
           <div style={{maxHeight:200,overflowY:"auto",marginBottom:14}}>
