@@ -246,6 +246,12 @@ export default function App() {
     return byFixedDay[si].filter(s=>fixedLog[s.id]?.active);
   },[selectedDay,calYear,calMonth,fixedLog,fixedLessons]);
 
+  // Lesson management
+  const [showAddFixed, setShowAddFixed] = useState(false);
+  const [newFixed, setNewFixed] = useState({place:"",day:0,time:"",fee:"",freq:"毎週",holiday5:false,note:""});
+  const [showAddVar, setShowAddVar] = useState(false);
+  const [newVar, setNewVar] = useState({place:"",day:0,time:"",unitPrice:"",freq:"隔週",defaultPeople:10,unit:"人"});
+
   // Spot/expense forms
   const [showSpotForm, setShowSpotForm] = useState(false);
   const [spotForm, setSpotForm] = useState({ name:"", date:"", people:1, unitPrice:3000 });
@@ -293,7 +299,7 @@ export default function App() {
           <button onClick={nextMonth} style={{background:"none", border:"none", color:"white", fontSize:22, cursor:"pointer"}}>›</button>
         </div>
         <div style={{display:"flex", overflowX:"auto"}}>
-          {[["calendar","📅 カレンダー"],["variable","📝 変動入力"],["expenses","💸 支出"],["analysis","📊 分析"]].map(([key,label])=>(
+          {[["calendar","📅 カレンダー"],["variable","📝 変動入力"],["expenses","💸 支出"],["lessons","⚙️ レッスン管理"],["analysis","📊 分析"]].map(([key,label])=>(
             <button key={key} onClick={()=>setActiveTab(key)}
               style={{flexShrink:0, padding:"9px 12px", background:"none", border:"none", borderBottom:activeTab===key?"2px solid white":"2px solid transparent", color:activeTab===key?"white":"#ffffff99", fontWeight:700, fontSize:11, cursor:"pointer",...F}}>
               {label}
@@ -612,7 +618,133 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* LESSONS MANAGEMENT */}
+        {activeTab==="lessons"&&(
+          <div>
+            {/* Fixed lessons */}
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
+              <div style={{fontSize:13, fontWeight:700, color:"#3b82f6"}}>固定レッスン</div>
+              <button onClick={()=>setShowAddFixed(true)} style={{fontSize:12, color:"#3b82f6", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8, padding:"4px 12px", cursor:"pointer",...F}}>＋ 追加</button>
+            </div>
+            {SCHED_DAYS.map((day,di)=>{
+              const lessons=fixedLessons.filter(s=>s.day===di);
+              if(!lessons.length) return null;
+              return (
+                <div key={di} style={{marginBottom:14}}>
+                  <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:6}}>
+                    <div style={{width:24, height:24, borderRadius:"50%", background:DAY_COLORS[di]+"20", border:`1.5px solid ${DAY_COLORS[di]}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:DAY_COLORS[di]}}>{day}</div>
+                  </div>
+                  {lessons.map(s=>(
+                    <div key={s.id} style={{background:"white", borderRadius:10, padding:"10px 14px", marginBottom:6, marginLeft:30, boxShadow:"0 1px 6px #00000010", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                      <div>
+                        <div style={{fontSize:13, fontWeight:600}}>{s.place}</div>
+                        <div style={{fontSize:11, color:"#94a3b8"}}>{s.time&&<span style={{marginRight:6}}>{s.time}</span>}<span style={{color:s.freq==="隔週"?"#f59e0b":"#3b82f6"}}>{s.freq}</span>{s.holiday5&&<span style={{marginLeft:6, color:"#f59e0b", fontSize:10}}>🏢5の日休館</span>}</div>
+                      </div>
+                      <div style={{display:"flex", alignItems:"center", gap:8}}>
+                        <span style={{fontSize:13, fontWeight:700, color:"#3b82f6", fontFamily:"'DM Mono',monospace"}}>¥{s.fee.toLocaleString()}</span>
+                        <button onClick={()=>{if(window.confirm(`「${s.place}」を削除しますか？`)){setFixedLessons(prev=>prev.filter(x=>x.id!==s.id));flashSaved();}}}
+                          style={{background:"#fee2e2", border:"none", borderRadius:6, padding:"4px 10px", color:"#ef4444", fontSize:12, cursor:"pointer",...F}}>削除</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+
+            <div style={{height:1, background:"#e2e8f0", margin:"16px 0"}}/>
+
+            {/* Variable lessons */}
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
+              <div style={{fontSize:13, fontWeight:700, color:"#8b5cf6"}}>変動レッスン</div>
+              <button onClick={()=>setShowAddVar(true)} style={{fontSize:12, color:"#8b5cf6", background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:8, padding:"4px 12px", cursor:"pointer",...F}}>＋ 追加</button>
+            </div>
+            {varLessons.map(s=>(
+              <div key={s.id} style={{background:"white", borderRadius:10, padding:"10px 14px", marginBottom:8, boxShadow:"0 1px 6px #00000010", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:600}}>{s.place} <span style={{fontSize:10, color:"#8b5cf6", background:"#f5f3ff", padding:"1px 5px", borderRadius:4}}>変動</span></div>
+                  <div style={{fontSize:11, color:"#94a3b8"}}>{SCHED_DAYS[s.day]}曜 {s.time&&<span style={{marginRight:6}}>{s.time}</span>}<span style={{color:s.freq==="隔週"?"#f59e0b":"#ec4899"}}>{s.freq}</span></div>
+                </div>
+                <div style={{display:"flex", alignItems:"center", gap:8}}>
+                  <span style={{fontSize:13, fontWeight:700, color:"#8b5cf6", fontFamily:"'DM Mono',monospace"}}>¥{s.unitPrice.toLocaleString()}/人</span>
+                  <button onClick={()=>{if(window.confirm(`「${s.place}」を削除しますか？`)){setVarLessons(prev=>prev.filter(x=>x.id!==s.id));flashSaved();}}}
+                    style={{background:"#fee2e2", border:"none", borderRadius:6, padding:"4px 10px", color:"#ef4444", fontSize:12, cursor:"pointer",...F}}>削除</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Add fixed lesson modal */}
+      {showAddFixed&&(
+        <Modal onClose={()=>setShowAddFixed(false)} title="➕ 固定レッスン追加" color="#3b82f6" light>
+          <Label>場所名</Label><LInput value={newFixed.place} onChange={v=>setNewFixed(f=>({...f,place:v}))} placeholder="例：○○体育館"/>
+          <Label>曜日</Label>
+          <div style={{display:"flex", gap:6, marginBottom:14, flexWrap:"wrap"}}>
+            {SCHED_DAYS.map((d,i)=>(
+              <button key={i} onClick={()=>setNewFixed(f=>({...f,day:i}))}
+                style={{padding:"5px 12px", borderRadius:8, border:newFixed.day===i?`2px solid ${DAY_COLORS[i]}`:"2px solid #e2e8f0", background:newFixed.day===i?DAY_COLORS[i]+"20":"white", color:newFixed.day===i?DAY_COLORS[i]:"#64748b", fontSize:12, cursor:"pointer",...F}}>{d}</button>
+            ))}
+          </div>
+          <Label>時間</Label><LInput value={newFixed.time} onChange={v=>setNewFixed(f=>({...f,time:v}))} placeholder="例：10:00-11:00"/>
+          <Label>1回の報酬（円）</Label><LInput type="number" value={newFixed.fee} onChange={v=>setNewFixed(f=>({...f,fee:v}))} placeholder="例：3000"/>
+          <Label>頻度</Label>
+          <div style={{display:"flex", gap:8, marginBottom:14}}>
+            {["毎週","隔週","月1回"].map(fr=>(
+              <button key={fr} onClick={()=>setNewFixed(f=>({...f,freq:fr}))}
+                style={{flex:1, padding:"7px", borderRadius:8, border:newFixed.freq===fr?"2px solid #3b82f6":"2px solid #e2e8f0", background:newFixed.freq===fr?"#eff6ff":"white", color:newFixed.freq===fr?"#3b82f6":"#64748b", fontSize:12, cursor:"pointer",...F}}>{fr}</button>
+            ))}
+          </div>
+          <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14, padding:"10px 12px", background:"#fffbeb", borderRadius:10, border:"1px solid #fde68a"}}>
+            <span style={{fontSize:13, color:"#64748b"}}>5・15・25日は休館日</span>
+            <button onClick={()=>setNewFixed(f=>({...f,holiday5:!f.holiday5}))}
+              style={{width:44, height:24, borderRadius:12, background:newFixed.holiday5?"#f59e0b":"#e2e8f0", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s"}}>
+              <div style={{width:18, height:18, borderRadius:"50%", background:"white", position:"absolute", top:3, left:newFixed.holiday5?23:3, transition:"left 0.2s"}}/>
+            </button>
+          </div>
+          <button onClick={()=>{
+            if(!newFixed.place||!newFixed.fee) return;
+            const lesson={...newFixed, id:Date.now(), fee:Number(newFixed.fee)};
+            setFixedLessons(prev=>[...prev,lesson]);
+            setFixedLog(prev=>({...prev,[lesson.id]:{count:lesson.freq==="毎週"?4:2,active:true,skipDates:[]}}));
+            setNewFixed({place:"",day:0,time:"",fee:"",freq:"毎週",holiday5:false,note:""});
+            setShowAddFixed(false); flashSaved();
+          }} style={{width:"100%", padding:13, borderRadius:12, border:"none", background:"#3b82f6", color:"white", fontWeight:700, fontSize:14, cursor:"pointer",...F}}>追加する</button>
+        </Modal>
+      )}
+
+      {/* Add var lesson modal */}
+      {showAddVar&&(
+        <Modal onClose={()=>setShowAddVar(false)} title="➕ 変動レッスン追加" color="#8b5cf6" light>
+          <Label>場所名</Label><LInput value={newVar.place} onChange={v=>setNewVar(f=>({...f,place:v}))} placeholder="例：○○サークル"/>
+          <Label>曜日</Label>
+          <div style={{display:"flex", gap:6, marginBottom:14, flexWrap:"wrap"}}>
+            {SCHED_DAYS.map((d,i)=>(
+              <button key={i} onClick={()=>setNewVar(f=>({...f,day:i}))}
+                style={{padding:"5px 12px", borderRadius:8, border:newVar.day===i?`2px solid ${DAY_COLORS[i]}`:"2px solid #e2e8f0", background:newVar.day===i?DAY_COLORS[i]+"20":"white", color:newVar.day===i?DAY_COLORS[i]:"#64748b", fontSize:12, cursor:"pointer",...F}}>{d}</button>
+            ))}
+          </div>
+          <Label>時間</Label><LInput value={newVar.time} onChange={v=>setNewVar(f=>({...f,time:v}))} placeholder="例：19:00-20:00"/>
+          <Label>1人あたりの単価（円）</Label><LInput type="number" value={newVar.unitPrice} onChange={v=>setNewVar(f=>({...f,unitPrice:v}))} placeholder="例：1500"/>
+          <Label>デフォルト人数</Label><LInput type="number" value={newVar.defaultPeople} onChange={v=>setNewVar(f=>({...f,defaultPeople:Number(v)}))} placeholder="例：10"/>
+          <Label>頻度</Label>
+          <div style={{display:"flex", gap:8, marginBottom:14}}>
+            {["毎週","隔週","月1回"].map(fr=>(
+              <button key={fr} onClick={()=>setNewVar(f=>({...f,freq:fr}))}
+                style={{flex:1, padding:"7px", borderRadius:8, border:newVar.freq===fr?"2px solid #8b5cf6":"2px solid #e2e8f0", background:newVar.freq===fr?"#f5f3ff":"white", color:newVar.freq===fr?"#8b5cf6":"#64748b", fontSize:12, cursor:"pointer",...F}}>{fr}</button>
+            ))}
+          </div>
+          <button onClick={()=>{
+            if(!newVar.place||!newVar.unitPrice) return;
+            const lesson={...newVar, id:`v${Date.now()}`, unitPrice:Number(newVar.unitPrice), defaultPeople:Number(newVar.defaultPeople)};
+            setVarLessons(prev=>[...prev,lesson]);
+            setVarLog(prev=>({...prev,[lesson.id]:{sessions:[{people:lesson.defaultPeople}],active:true}}));
+            setNewVar({place:"",day:0,time:"",unitPrice:"",freq:"隔週",defaultPeople:10,unit:"人"});
+            setShowAddVar(false); flashSaved();
+          }} style={{width:"100%", padding:13, borderRadius:12, border:"none", background:"#8b5cf6", color:"white", fontWeight:700, fontSize:14, cursor:"pointer",...F}}>追加する</button>
+        </Modal>
+      )}
 
       {/* Add lesson from calendar modal */}
       {showAddLesson&&(
