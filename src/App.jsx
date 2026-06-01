@@ -661,8 +661,8 @@ export default function App() {
             ))}
           </div>
 
-          <Label>レッスン名</Label><LInput value={lForm.lessonName||""} onChange={v=>setLForm(f=>({...f,lessonName:v}))} placeholder="例：エアロビクス・ヨガ・コンディショニング"/>
           <Label>場所名（ジム・施設名）</Label><LInput value={lForm.place} onChange={v=>setLForm(f=>({...f,place:v}))} placeholder="例：○○体育館"/>
+          <Label>レッスン名</Label><LInput value={lForm.lessonName||""} onChange={v=>setLForm(f=>({...f,lessonName:v}))} placeholder="例：エアロビクス・ヨガ・コンディショニング"/>
 
           <Label>曜日</Label>
           <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
