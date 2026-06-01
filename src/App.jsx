@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 
-// ── constants ─────────────────────────────────────────────────
 const MONTHS_JP = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 const WEEK_DAYS = ["日","月","火","水","木","金","土"];
 const SCHED_DAYS = ["月","火","水","木","金","土","日"];
@@ -10,12 +9,33 @@ const CATEGORIES = {
   circle:  { label:"サークル",   icon:"👥", color:"#8b5cf6", desc:"人数 × 単価" },
   event:   { label:"イベント",   icon:"🎯", color:"#ef4444", desc:"スポット単発" },
   part:    { label:"アルバイト", icon:"💼", color:"#f97316", desc:"時給 × 時間数" },
+  sub:     { label:"代行",       icon:"🔄", color:"#10b981", desc:"登録済みジムの代行" },
 };
 
 const EXPENSE_CATS = ["交通費","駐車場","スタジオ代","その他"];
 const EXPENSE_COLORS = { "交通費":"#3b82f6","駐車場":"#f59e0b","スタジオ代":"#8b5cf6","その他":"#6b7280" };
-
 const FREQS = ["毎週","隔週","月1回","月2回"];
+
+// 日本の祝日 (固定祝日のみ、簡易版)
+const FIXED_HOLIDAYS = [
+  "01-01","01-02","01-03", // 元旦
+  "02-11","02-23",         // 建国記念・天皇誕生日
+  "03-20",                 // 春分（近似）
+  "04-29",                 // 昭和の日
+  "05-03","05-04","05-05", // GW
+  "07-20",                 // 海の日（近似）
+  "08-11",                 // 山の日
+  "09-21",                 // 敬老の日（近似）
+  "09-23",                 // 秋分（近似）
+  "10-14",                 // 体育の日（近似）
+  "11-03","11-23",         // 文化の日・勤労感謝
+];
+
+function isHoliday(year, month, day) {
+  const mm = String(month).padStart(2,"0");
+  const dd = String(day).padStart(2,"0");
+  return FIXED_HOLIDAYS.includes(`${mm}-${dd}`);
+}
 
 function has5(day) { return day % 10 === 5; }
 
@@ -34,80 +54,119 @@ function defaultCount(freq) {
   return 1;
 }
 
-// ── storage ───────────────────────────────────────────────────
+// 時間ドロップダウン用: 6:00〜23:55 5分刻み
+function genTimeOptions() {
+  const opts = [""];
+  for (let h = 6; h <= 23; h++) {
+    for (let m = 0; m < 60; m += 5) {
+      opts.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+    }
+  }
+  return opts;
+}
+const TIME_OPTIONS = genTimeOptions();
+
+// 時給 × 実分数で報酬計算
+function calcFeeFromTime(startTime, endTime, hourlyRate) {
+  if (!startTime || !endTime || !hourlyRate) return 0;
+  const [sh, sm] = startTime.split(":").map(Number);
+  const [eh, em] = endTime.split(":").map(Number);
+  const minutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (minutes <= 0) return 0;
+  return Math.round((hourlyRate / 60) * minutes);
+}
+
 function load(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
 function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
 
 const F = { fontFamily:"'Noto Sans JP',sans-serif" };
+const cBtn = { width:36, height:36, borderRadius:8, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" };
+const delBtn = { background:"#fee2e2", border:"none", borderRadius:6, padding:"4px 10px", color:"#ef4444", fontSize:12, cursor:"pointer", fontFamily:"'Noto Sans JP',sans-serif" };
 
-// ── main component ────────────────────────────────────────────
 export default function App() {
   const today = new Date();
-  const [tab, setTab]             = useState("calendar");
-  const [calYear,  setCalYear]    = useState(today.getFullYear());
-  const [calMonth, setCalMonth]   = useState(today.getMonth() + 1);
-  const [selDay,   setSelDay]     = useState(null);
-  const [badge,    setBadge]      = useState(false);
+  const [tab, setTab]           = useState("calendar");
+  const [calYear,  setCalYear]  = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth() + 1);
+  const [selDay,   setSelDay]   = useState(null);
+  const [badge,    setBadge]    = useState(false);
 
-  // ── master data (persisted) ───────────────────────────────
-  const [lessons,   setLessons]   = useState(() => load("en2_lessons",  []));
-  const [payGroups, setPayGroups] = useState(() => load("en2_paygroups",[]));
+  const [lessons,   setLessons]   = useState(() => load("en3_lessons",   []));
+  const [payGroups, setPayGroups] = useState(() => load("en3_paygroups", []));
 
-  // ── monthly data (per month key) ─────────────────────────
   const mk = `${calYear}-${String(calMonth).padStart(2,"0")}`;
 
-  const [allLogs,     setAllLogs]     = useState(() => load("en2_logs",     {}));
-  const [allExpenses, setAllExpenses] = useState(() => load("en2_expenses", {}));
-  const [allSpots,    setAllSpots]    = useState(() => load("en2_spots",    {}));
-  const [subMembers,  setSubMembersState] = useState(() => load("en2_sub", 0));
+  const [allLogs,     setAllLogs]     = useState(() => load("en3_logs",     {}));
+  const [allExpenses, setAllExpenses] = useState(() => load("en3_expenses", {}));
+  const [allSpots,    setAllSpots]    = useState(() => load("en3_spots",    {}));
+  const [allSubs,     setAllSubs]     = useState(() => load("en3_subs",     {})); // 代行
+  const [subMembers,  setSubMembersRaw] = useState(() => load("en3_sub", 0));
 
   const logs     = allLogs[mk]     ?? {};
   const expenses = allExpenses[mk] ?? [];
   const spots    = allSpots[mk]    ?? [];
+  const subs     = allSubs[mk]     ?? []; // 代行リスト
 
   const flash = () => { setBadge(true); setTimeout(() => setBadge(false), 1500); };
 
-  const setLogs     = useCallback(fn => setAllLogs(p     => { const n = {...p, [mk]: typeof fn==="function" ? fn(p[mk]??{}) : fn}; save("en2_logs",n); return n; }), [mk]);
-  const setExpenses = useCallback(fn => setAllExpenses(p => { const n = {...p, [mk]: typeof fn==="function" ? fn(p[mk]??[]) : fn}; save("en2_expenses",n); return n; }), [mk]);
-  const setSpots    = useCallback(fn => setAllSpots(p    => { const n = {...p, [mk]: typeof fn==="function" ? fn(p[mk]??[]) : fn}; save("en2_spots",n); return n; }), [mk]);
-  const setSubMembers = v => { setSubMembersState(v); save("en2_sub", v); };
+  const setLogs     = useCallback(fn => setAllLogs(p     => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??{}):fn}; save("en3_logs",n); return n; }), [mk]);
+  const setExpenses = useCallback(fn => setAllExpenses(p => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_expenses",n); return n; }), [mk]);
+  const setSpots    = useCallback(fn => setAllSpots(p    => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_spots",n); return n; }), [mk]);
+  const setSubs     = useCallback(fn => setAllSubs(p     => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_subs",n); return n; }), [mk]);
+  const setSubMembers = v => { setSubMembersRaw(v); save("en3_sub", v); };
 
-  useEffect(() => { save("en2_lessons",  lessons);   }, [lessons]);
-  useEffect(() => { save("en2_paygroups",payGroups); }, [payGroups]);
+  useEffect(() => { save("en3_lessons",   lessons);   }, [lessons]);
+  useEffect(() => { save("en3_paygroups", payGroups); }, [payGroups]);
 
-  // ── income helpers ────────────────────────────────────────
-  const getLog = useCallback((id) => logs[id] ?? { count: defaultCount(lessons.find(l=>l.id===id)?.freq??"毎週"), active:true, skipDates:[], people:10, hours:1 }, [logs, lessons]);
+  // lesson fee calculation
+  const getLessonFee = useCallback((l) => {
+    if (l.feeMode === "calc" && l.startTime && l.endTime && l.hourlyRate) {
+      return calcFeeFromTime(l.startTime, l.endTime, l.hourlyRate);
+    }
+    return l.fee ?? 0;
+  }, []);
+
+  const getLog = useCallback((id) => {
+    const l = lessons.find(x => x.id === id);
+    return logs[id] ?? { count: defaultCount(l?.freq ?? "毎週"), active:true, skipDates:[], people: l?.defaultPeople ?? 10, hours:1 };
+  }, [logs, lessons]);
 
   const lessonIncome = useCallback((l) => {
     const lg = getLog(l.id);
     if (!lg.active) return 0;
     const skips = lg.skipDates?.length ?? 0;
     const cnt = Math.max(0, lg.count - skips);
-    if (l.category === "circle")  return cnt * (lg.people ?? l.defaultPeople ?? 10) * (l.unitPrice ?? 0);
-    if (l.category === "part")    return cnt * (lg.hours ?? 1) * (l.hourlyRate ?? 0);
-    return cnt * (l.fee ?? 0);
-  }, [getLog]);
+    const fee = getLessonFee(l);
+    if (l.category === "circle") return cnt * (lg.peopleSessions ? lg.peopleSessions.reduce((a,p)=>a+p,0)/lg.peopleSessions.length : (l.defaultPeople??10)) * (l.unitPrice??0);
+    if (l.category === "part")   return cnt * (lg.hours ?? 1) * (l.hourlyRate ?? 0);
+    return cnt * fee;
+  }, [getLog, getLessonFee]);
 
+  const subsIncome   = subs.reduce((s,e) => s + (e.fee ?? 0), 0);
   const totalLessonIncome = useMemo(() => lessons.reduce((s,l) => s + lessonIncome(l), 0), [lessons, logs]);
-  const subIncome = subMembers * 1000;
-  const spotIncome = spots.reduce((s,e) => s + e.amount, 0);
-  const totalIncome = totalLessonIncome + subIncome + spotIncome;
-  const totalExpenses = expenses.reduce((s,e) => s + Number(e.amount), 0);
-  const netIncome = totalIncome - totalExpenses;
+  const subIncome    = subMembers * 1000;
+  const spotIncome   = spots.reduce((s,e) => s + e.amount, 0);
+  const totalIncome  = totalLessonIncome + subIncome + spotIncome + subsIncome;
+  const totalExpenses= expenses.reduce((s,e) => s + Number(e.amount), 0);
+  const netIncome    = totalIncome - totalExpenses;
 
-  // ── calendar helpers ──────────────────────────────────────
   const isSkipped = useCallback((id, date) => {
-    const lg = getLog(id);
-    return lg.skipDates?.includes(`${mk}-${String(date).padStart(2,"0")}`);
+    return getLog(id).skipDates?.includes(`${mk}-${String(date).padStart(2,"0")}`);
   }, [getLog, mk]);
+
+  const isRestDay = useCallback((l, date) => {
+    if (l.holiday5 && has5(date)) return "5のつく日休館";
+    if (l.holidayOff && isHoliday(calYear, calMonth, date)) return "祝日休み";
+    return null;
+  }, [calYear, calMonth]);
 
   const toggleSkip = (id, date) => {
     const ds = `${mk}-${String(date).padStart(2,"0")}`;
     setLogs(p => {
       const cur = p[id] ?? getLog(id);
-      const sk = cur.skipDates ?? [];
+      const sk  = cur.skipDates ?? [];
       return {...p, [id]: {...cur, skipDates: sk.includes(ds) ? sk.filter(d=>d!==ds) : [...sk,ds]}};
     });
     flash();
@@ -125,7 +184,7 @@ export default function App() {
     for (let d = 1; d <= last; d++) {
       const dow = new Date(calYear, calMonth-1, d).getDay();
       const si  = dow === 0 ? 6 : dow - 1;
-      const ls  = lessons.filter(l => l.day === si && getLog(l.id).active && !(l.holiday5 && has5(d)) && !isSkipped(l.id, d));
+      const ls  = lessons.filter(l => l.day===si && getLog(l.id).active && !isRestDay(l,d) && !isSkipped(l.id,d));
       if (ls.length) map[d] = ls;
     }
     return map;
@@ -135,14 +194,14 @@ export default function App() {
     if (!selDay) return [];
     const dow = new Date(calYear, calMonth-1, selDay).getDay();
     const si  = dow === 0 ? 6 : dow - 1;
-    return lessons.filter(l => l.day === si && getLog(l.id).active);
+    return lessons.filter(l => l.day===si && getLog(l.id).active);
   }, [selDay, calYear, calMonth, lessons, logs]);
 
   const paydayMap = useMemo(() => {
     const map = {};
     payGroups.forEach(g => {
       const actual = getActualPayDay(calYear, calMonth, g.payDay);
-      const inc = lessons.filter(l => g.lessonIds?.includes(l.id)).reduce((s,l) => s + lessonIncome(l), 0);
+      const inc = lessons.filter(l => g.lessonIds?.includes(l.id)).reduce((s,l) => s+lessonIncome(l), 0);
       if (!map[actual]) map[actual] = [];
       map[actual].push({...g, actual, inc});
     });
@@ -150,18 +209,17 @@ export default function App() {
   }, [calYear, calMonth, payGroups, lessons, logs]);
 
   const spotsByDate = useMemo(() => {
-    const map = {};
-    spots.forEach(e => { const d = parseInt(e.date.split("-")[2]); if (!map[d]) map[d] = []; map[d].push(e); });
-    return map;
+    const map = {}; spots.forEach(e => { const d=parseInt(e.date.split("-")[2]); if(!map[d])map[d]=[]; map[d].push(e); }); return map;
   }, [spots]);
 
+  const subsByDate = useMemo(() => {
+    const map = {}; subs.forEach(e => { const d=parseInt(e.date.split("-")[2]); if(!map[d])map[d]=[]; map[d].push(e); }); return map;
+  }, [subs]);
+
   const expensesByDate = useMemo(() => {
-    const map = {};
-    expenses.forEach(e => { const d = parseInt(e.date.split("-")[2]); if (!map[d]) map[d] = []; map[d].push(e); });
-    return map;
+    const map = {}; expenses.forEach(e => { const d=parseInt(e.date.split("-")[2]); if(!map[d])map[d]=[]; map[d].push(e); }); return map;
   }, [expenses]);
 
-  // ── weekly income ─────────────────────────────────────────
   const weeklyIncome = useMemo(() => {
     const weeks = [0,0,0,0,0];
     const last = new Date(calYear, calMonth, 0).getDate();
@@ -169,66 +227,77 @@ export default function App() {
       const wi  = Math.min(Math.floor((d-1)/7), 4);
       const dow = new Date(calYear, calMonth-1, d).getDay();
       const si  = dow === 0 ? 6 : dow - 1;
-      lessons.filter(l => l.day === si && getLog(l.id).active && !(l.holiday5 && has5(d)) && !isSkipped(l.id, d))
-        .forEach(l => { weeks[wi] += lessonIncome(l) / Math.max(1, getLog(l.id).count); });
+      lessons.filter(l => l.day===si && getLog(l.id).active && !isRestDay(l,d) && !isSkipped(l.id,d))
+        .forEach(l => { weeks[wi] += getLessonFee(l); });
     }
-    const last1 = new Date(calYear, calMonth, 0).getDate();
-    return weeks.filter((_, i) => i * 7 + 1 <= last1);
+    return weeks.filter((_,i) => i*7+1 <= last);
   }, [calYear, calMonth, lessons, logs]);
 
-  // ── forms ─────────────────────────────────────────────────
+  // forms
+  const blankLesson = { category:"regular", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed" };
+  const [lForm, setLForm] = useState(blankLesson);
+  const [editLesson, setEditLesson] = useState(null);
   const [showAddLesson,  setShowAddLesson]  = useState(false);
   const [showAddSpot,    setShowAddSpot]    = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddPayGroup,setShowAddPayGroup]= useState(false);
-  const [editLesson,     setEditLesson]     = useState(null);
+  const [showAddSub,     setShowAddSub]     = useState(false);
 
-  const blankLesson = { category:"regular", place:"", day:0, time:"", fee:"", freq:"毎週", holiday5:false, unitPrice:"", defaultPeople:10, hourlyRate:"" };
-  const [lForm, setLForm] = useState(blankLesson);
-  const [spotForm,    setSpotForm]    = useState({ name:"", date:`${mk}-01`, amount:"", note:"" });
-  const [expForm,     setExpForm]     = useState({ category:"交通費", amount:"", date:`${mk}-01`, note:"" });
-  const [pgForm,      setPgForm]      = useState({ name:"", payDay:"", lessonIds:[] });
+  const [spotForm, setSpotForm] = useState({ name:"", date:`${mk}-01`, amount:"", note:"" });
+  const [expForm,  setExpForm]  = useState({ category:"交通費", amount:"", date:`${mk}-01`, note:"" });
+  const [pgForm,   setPgForm]   = useState({ name:"", payDay:"", lessonIds:[] });
+  const [subForm,  setSubForm]  = useState({ lessonId:"", date:`${mk}-01`, note:"" });
+
+  const previewFee = useMemo(() => {
+    if (lForm.feeMode === "calc") return calcFeeFromTime(lForm.startTime, lForm.endTime, Number(lForm.hourlyRate));
+    return Number(lForm.fee) || 0;
+  }, [lForm]);
 
   const saveLesson = () => {
     if (!lForm.place) return;
-    const l = { ...lForm, id: editLesson ?? Date.now(),
-      fee: Number(lForm.fee)||0, unitPrice: Number(lForm.unitPrice)||0,
-      hourlyRate: Number(lForm.hourlyRate)||0, defaultPeople: Number(lForm.defaultPeople)||10, day: Number(lForm.day) };
-    setLessons(p => editLesson ? p.map(x => x.id===editLesson ? l : x) : [...p, l]);
-    if (!editLesson) setLogs(p => ({...p, [l.id]: { count: defaultCount(l.freq), active:true, skipDates:[], people: l.defaultPeople, hours:1 }}));
+    const fee = lForm.feeMode === "calc" ? calcFeeFromTime(lForm.startTime, lForm.endTime, Number(lForm.hourlyRate)) : Number(lForm.fee)||0;
+    const l = { ...lForm, id: editLesson ?? Date.now(), fee, unitPrice:Number(lForm.unitPrice)||0, hourlyRate:Number(lForm.hourlyRate)||0, defaultPeople:Number(lForm.defaultPeople)||10, day:Number(lForm.day) };
+    setLessons(p => editLesson ? p.map(x => x.id===editLesson?l:x) : [...p,l]);
+    if (!editLesson) setLogs(p => ({...p, [l.id]:{ count:defaultCount(l.freq), active:true, skipDates:[], people:l.defaultPeople, hours:1 }}));
     setEditLesson(null); setShowAddLesson(false); setLForm(blankLesson); flash();
   };
-  const deleteLesson = (id) => { if (window.confirm("このレッスンを削除しますか？")) { setLessons(p => p.filter(x => x.id !== id)); flash(); }};
-  const saveSpot    = () => { if (!spotForm.name||!spotForm.amount) return; setSpots(p => [...p, {id:Date.now(),...spotForm,amount:Number(spotForm.amount)}]); setShowAddSpot(false); flash(); };
-  const saveExpense = () => { if (!expForm.amount) return; setExpenses(p => [...p, {id:Date.now(),...expForm}]); setShowAddExpense(false); flash(); };
-  const savePayGroup= () => { if (!pgForm.name) return; setPayGroups(p => [...p, {id:Date.now(),...pgForm,payDay:Number(pgForm.payDay)}]); setShowAddPayGroup(false); setPgForm({name:"",payDay:"",lessonIds:[]}); flash(); };
+  const deleteLesson = id => { if(window.confirm("このレッスンを削除しますか？")) { setLessons(p=>p.filter(x=>x.id!==id)); flash(); }};
+  const saveSpot    = () => { if(!spotForm.name||!spotForm.amount) return; setSpots(p=>[...p,{id:Date.now(),...spotForm,amount:Number(spotForm.amount)}]); setShowAddSpot(false); flash(); };
+  const saveExpense = () => { if(!expForm.amount) return; setExpenses(p=>[...p,{id:Date.now(),...expForm}]); setShowAddExpense(false); flash(); };
+  const savePayGroup= () => { if(!pgForm.name) return; setPayGroups(p=>[...p,{id:Date.now(),...pgForm,payDay:Number(pgForm.payDay)}]); setShowAddPayGroup(false); setPgForm({name:"",payDay:"",lessonIds:[]}); flash(); };
+  const saveSub     = () => {
+    if(!subForm.lessonId||!subForm.date) return;
+    const l = lessons.find(x=>x.id===Number(subForm.lessonId)||x.id===subForm.lessonId);
+    const fee = l ? getLessonFee(l) : 0;
+    setSubs(p=>[...p,{id:Date.now(),...subForm,place:l?.place??"",fee}]);
+    setShowAddSub(false); flash();
+  };
 
   const prevMonth = () => { if(calMonth===1){setCalYear(y=>y-1);setCalMonth(12);}else setCalMonth(m=>m-1); setSelDay(null); };
   const nextMonth = () => { if(calMonth===12){setCalYear(y=>y+1);setCalMonth(1);}else setCalMonth(m=>m+1); setSelDay(null); };
 
-  // ── render ────────────────────────────────────────────────
   return (
-    <div style={{...F, background:"#f0f4f8", minHeight:"100vh", color:"#1e293b", maxWidth:480, margin:"0 auto"}}>
+    <div style={{...F,background:"#f0f4f8",minHeight:"100vh",color:"#1e293b",maxWidth:480,margin:"0 auto"}}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
 
-      {/* ── header ── */}
-      <div style={{background:"linear-gradient(135deg,#3b82f6,#8b5cf6)", padding:"16px 18px 0", position:"sticky", top:0, zIndex:50, boxShadow:"0 2px 12px #3b82f640"}}>
-        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+      {/* header */}
+      <div style={{background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",padding:"16px 18px 0",position:"sticky",top:0,zIndex:50,boxShadow:"0 2px 12px #3b82f640"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div>
-            <div style={{fontSize:10, color:"#ffffff99", letterSpacing:3, fontWeight:700}}>ENARIZE</div>
-            <div style={{fontSize:20, fontWeight:700, fontFamily:"'DM Mono',monospace", color:"white"}}>Lesson Income</div>
+            <div style={{fontSize:10,color:"#ffffff99",letterSpacing:3,fontWeight:700}}>ENARIZE</div>
+            <div style={{fontSize:20,fontWeight:700,fontFamily:"'DM Mono',monospace",color:"white"}}>Lesson Income</div>
           </div>
-          {badge && <div style={{fontSize:10, color:"white", background:"#ffffff30", padding:"3px 10px", borderRadius:20}}>✓ 保存済み</div>}
+          {badge&&<div style={{fontSize:10,color:"white",background:"#ffffff30",padding:"3px 10px",borderRadius:20}}>✓ 保存済み</div>}
         </div>
-        <div style={{display:"flex", alignItems:"center", justifyContent:"center", gap:20, marginBottom:10}}>
-          <button onClick={prevMonth} style={{background:"none", border:"none", color:"white", fontSize:22, cursor:"pointer"}}>‹</button>
-          <span style={{fontSize:15, fontWeight:700, color:"white"}}>{calYear}年 {MONTHS_JP[calMonth-1]}</span>
-          <button onClick={nextMonth} style={{background:"none", border:"none", color:"white", fontSize:22, cursor:"pointer"}}>›</button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:20,marginBottom:10}}>
+          <button onClick={prevMonth} style={{background:"none",border:"none",color:"white",fontSize:22,cursor:"pointer"}}>‹</button>
+          <span style={{fontSize:15,fontWeight:700,color:"white"}}>{calYear}年 {MONTHS_JP[calMonth-1]}</span>
+          <button onClick={nextMonth} style={{background:"none",border:"none",color:"white",fontSize:22,cursor:"pointer"}}>›</button>
         </div>
-        <div style={{display:"flex", overflowX:"auto"}}>
+        <div style={{display:"flex",overflowX:"auto"}}>
           {[["calendar","📅"],["input","📝"],["expenses","💸"],["lessons","⚙️"],["analysis","📊"]].map(([key,icon])=>(
             <button key={key} onClick={()=>setTab(key)}
-              style={{flexShrink:0, flex:1, padding:"9px 8px", background:"none", border:"none", borderBottom:tab===key?"2px solid white":"2px solid transparent", color:tab===key?"white":"#ffffff80", fontWeight:700, fontSize:18, cursor:"pointer"}}>
+              style={{flexShrink:0,flex:1,padding:"9px 8px",background:"none",border:"none",borderBottom:tab===key?"2px solid white":"2px solid transparent",color:tab===key?"white":"#ffffff80",fontWeight:700,fontSize:18,cursor:"pointer"}}>
               {icon}
             </button>
           ))}
@@ -236,84 +305,71 @@ export default function App() {
       </div>
 
       <div style={{padding:14}}>
-        {/* ── summary card ── */}
-        <div style={{background:"white", borderRadius:16, padding:16, marginBottom:14, boxShadow:"0 2px 12px #00000012"}}>
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12}}>
+        {/* summary */}
+        <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
             <div>
-              <div style={{fontSize:10, color:"#94a3b8", letterSpacing:1, marginBottom:4}}>今月の収入見込み</div>
-              <div style={{fontSize:26, fontWeight:700, fontFamily:"'DM Mono',monospace"}}>¥{totalIncome.toLocaleString()}</div>
+              <div style={{fontSize:10,color:"#94a3b8",letterSpacing:1,marginBottom:4}}>今月の収入見込み</div>
+              <div style={{fontSize:26,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>¥{totalIncome.toLocaleString()}</div>
             </div>
             <div style={{textAlign:"right"}}>
-              <div style={{fontSize:10, color:"#94a3b8", marginBottom:4}}>手残り</div>
-              <div style={{fontSize:20, fontWeight:700, fontFamily:"'DM Mono',monospace", color:netIncome>=0?"#10b981":"#ef4444"}}>¥{netIncome.toLocaleString()}</div>
+              <div style={{fontSize:10,color:"#94a3b8",marginBottom:4}}>手残り</div>
+              <div style={{fontSize:20,fontWeight:700,fontFamily:"'DM Mono',monospace",color:netIncome>=0?"#10b981":"#ef4444"}}>¥{netIncome.toLocaleString()}</div>
             </div>
           </div>
-          {/* category breakdown */}
-          <div style={{display:"flex", gap:6, flexWrap:"wrap"}}>
-            {Object.entries(CATEGORIES).map(([key,cat]) => {
-              const inc = lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0);
-              if (!inc) return null;
-              return (
-                <div key={key} style={{background:cat.color+"12", borderRadius:8, padding:"5px 10px", border:`1px solid ${cat.color}25`}}>
-                  <span style={{fontSize:10, color:cat.color, fontWeight:700}}>{cat.icon} {cat.label}</span>
-                  <span style={{fontSize:11, fontFamily:"'DM Mono',monospace", color:cat.color, marginLeft:6}}>¥{inc.toLocaleString()}</span>
-                </div>
-              );
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {Object.entries(CATEGORIES).map(([key,cat])=>{
+              const inc = key==="sub" ? subsIncome : lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0);
+              if(!inc) return null;
+              return <div key={key} style={{background:cat.color+"12",borderRadius:8,padding:"5px 10px",border:`1px solid ${cat.color}25`}}><span style={{fontSize:10,color:cat.color,fontWeight:700}}>{cat.icon} {cat.label}</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:cat.color,marginLeft:6}}>¥{inc.toLocaleString()}</span></div>;
             })}
-            {subIncome>0&&<div style={{background:"#10b98112", borderRadius:8, padding:"5px 10px", border:"1px solid #10b98125"}}><span style={{fontSize:10, color:"#10b981", fontWeight:700}}>📱 サブスク</span><span style={{fontSize:11, fontFamily:"'DM Mono',monospace", color:"#10b981", marginLeft:6}}>¥{subIncome.toLocaleString()}</span></div>}
+            {subIncome>0&&<div style={{background:"#10b98112",borderRadius:8,padding:"5px 10px",border:"1px solid #10b98125"}}><span style={{fontSize:10,color:"#10b981",fontWeight:700}}>📱 サブスク</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#10b981",marginLeft:6}}>¥{subIncome.toLocaleString()}</span></div>}
           </div>
         </div>
 
-        {/* ── weekly bar ── */}
-        {weeklyIncome.length > 0 && (
-          <div style={{background:"white", borderRadius:16, padding:"14px 16px", marginBottom:14, boxShadow:"0 2px 12px #00000012"}}>
-            <div style={{fontSize:12, fontWeight:700, color:"#64748b", marginBottom:10}}>週別収入</div>
-            <div style={{display:"flex", gap:6}}>
-              {weeklyIncome.map((w,i) => {
-                const max = Math.max(...weeklyIncome, 1);
-                return (
-                  <div key={i} style={{flex:1, textAlign:"center"}}>
-                    <div style={{height:44, display:"flex", alignItems:"flex-end", justifyContent:"center", marginBottom:4}}>
-                      <div style={{width:"75%", background:"linear-gradient(180deg,#3b82f6,#8b5cf6)", borderRadius:"4px 4px 0 0", height:`${Math.max(4,w/max*100)}%`}}/>
-                    </div>
-                    <div style={{fontSize:9, color:"#94a3b8"}}>{i+1}週</div>
-                    <div style={{fontSize:10, fontWeight:700, color:"#3b82f6", fontFamily:"'DM Mono',monospace"}}>¥{Math.round(w/1000)}k</div>
-                  </div>
-                );
+        {/* weekly bar */}
+        {weeklyIncome.length>0&&(
+          <div style={{background:"white",borderRadius:16,padding:"14px 16px",marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:10}}>週別収入</div>
+            <div style={{display:"flex",gap:6}}>
+              {weeklyIncome.map((w,i)=>{
+                const max=Math.max(...weeklyIncome,1);
+                return <div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:44,display:"flex",alignItems:"flex-end",justifyContent:"center",marginBottom:4}}><div style={{width:"75%",background:"linear-gradient(180deg,#3b82f6,#8b5cf6)",borderRadius:"4px 4px 0 0",height:`${Math.max(4,w/max*100)}%`}}/></div><div style={{fontSize:9,color:"#94a3b8"}}>{i+1}週</div><div style={{fontSize:10,fontWeight:700,color:"#3b82f6",fontFamily:"'DM Mono',monospace"}}>¥{Math.round(w/1000)}k</div></div>;
               })}
             </div>
           </div>
         )}
 
-        {/* ════════ CALENDAR ════════ */}
-        {tab==="calendar" && (
+        {/* ══ CALENDAR ══ */}
+        {tab==="calendar"&&(
           <div>
-            <div style={{background:"white", borderRadius:16, padding:14, marginBottom:14, boxShadow:"0 2px 12px #00000012"}}>
-              <div style={{display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:6}}>
-                {WEEK_DAYS.map((d,i) => <div key={d} style={{textAlign:"center", fontSize:11, fontWeight:700, color:i===0?"#ef4444":i===6?"#3b82f6":"#94a3b8", padding:"4px 0"}}>{d}</div>)}
+            <div style={{background:"white",borderRadius:16,padding:14,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:6}}>
+                {WEEK_DAYS.map((d,i)=><div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:i===0?"#ef4444":i===6?"#3b82f6":"#94a3b8",padding:"4px 0"}}>{d}</div>)}
               </div>
-              <div style={{display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:3}}>
-                {calDays.map((d,i) => {
-                  if (!d) return <div key={`e${i}`}/>;
-                  const isToday = d===today.getDate()&&calMonth===today.getMonth()+1&&calYear===today.getFullYear();
-                  const isSel   = selDay===d;
-                  const dow     = new Date(calYear,calMonth-1,d).getDay();
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+                {calDays.map((d,i)=>{
+                  if(!d) return <div key={`e${i}`}/>;
+                  const isToday=d===today.getDate()&&calMonth===today.getMonth()+1&&calYear===today.getFullYear();
+                  const isSel=selDay===d;
+                  const dow=new Date(calYear,calMonth-1,d).getDay();
+                  const isHol=isHoliday(calYear,calMonth,d);
                   return (
                     <button key={d} onClick={()=>setSelDay(isSel?null:d)}
-                      style={{aspectRatio:"1", borderRadius:10, border:"none", background:isSel?"#3b82f6":isToday?"#eff6ff":has5(d)?"#fef9c3":"#f8fafc", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:1, padding:2, boxShadow:isSel?"0 2px 8px #3b82f660":"none"}}>
-                      <span style={{fontSize:13, fontWeight:isToday?700:400, color:isSel?"white":dow===0?"#ef4444":dow===6?"#3b82f6":"#1e293b"}}>{d}</span>
-                      <div style={{display:"flex", gap:2}}>
-                        {lessonsByDate[d]   && <div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#8b5cf6"}}/>}
-                        {paydayMap[d]       && <div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#f59e0b"}}/>}
-                        {spotsByDate[d]     && <div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#ef4444"}}/>}
-                        {expensesByDate[d]  && <div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#10b981"}}/>}
+                      style={{aspectRatio:"1",borderRadius:10,border:"none",background:isSel?"#3b82f6":isToday?"#eff6ff":isHol?"#fce7f3":has5(d)?"#fef9c3":"#f8fafc",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,padding:2,boxShadow:isSel?"0 2px 8px #3b82f660":"none"}}>
+                      <span style={{fontSize:13,fontWeight:isToday?700:400,color:isSel?"white":dow===0?"#ef4444":isHol?"#db2777":dow===6?"#3b82f6":"#1e293b"}}>{d}</span>
+                      <div style={{display:"flex",gap:2}}>
+                        {lessonsByDate[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#8b5cf6"}}/>}
+                        {paydayMap[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#f59e0b"}}/>}
+                        {(spotsByDate[d]||subsByDate[d])&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#ef4444"}}/>}
+                        {expensesByDate[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#10b981"}}/>}
                       </div>
                     </button>
                   );
                 })}
               </div>
-              <div style={{display:"flex", gap:10, marginTop:10, paddingTop:10, borderTop:"1px solid #f1f5f9", justifyContent:"center", flexWrap:"wrap"}}>
-                {[["#8b5cf6","レッスン"],["#f59e0b","給料日"],["#ef4444","スポット"],["#10b981","支出"],["#fef9c3","5のつく日"]].map(([c,l])=>(
+              <div style={{display:"flex",gap:8,marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",justifyContent:"center",flexWrap:"wrap"}}>
+                {[["#8b5cf6","レッスン"],["#f59e0b","給料日"],["#ef4444","スポット"],["#10b981","支出"],["#fce7f3","祝日"],["#fef9c3","5の日"]].map(([c,l])=>(
                   <div key={l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#64748b"}}>
                     <div style={{width:8,height:8,borderRadius:"50%",background:c,border:"1px solid #e2e8f0"}}/>{l}
                   </div>
@@ -321,51 +377,61 @@ export default function App() {
               </div>
             </div>
 
-            {/* selected day detail */}
-            {selDay && (
-              <div style={{background:"white", borderRadius:16, padding:16, marginBottom:14, boxShadow:"0 2px 12px #00000012"}}>
-                <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12}}>
-                  <div style={{fontSize:15, fontWeight:700, color:"#3b82f6"}}>
+            {selDay&&(
+              <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{fontSize:15,fontWeight:700,color:"#3b82f6"}}>
                     {calMonth}月{selDay}日
-                    {has5(selDay) && <span style={{fontSize:10, color:"#f59e0b", background:"#fef9c3", padding:"2px 6px", borderRadius:8, marginLeft:8}}>5のつく日</span>}
+                    {isHoliday(calYear,calMonth,selDay)&&<span style={{fontSize:10,color:"#db2777",background:"#fce7f3",padding:"2px 6px",borderRadius:8,marginLeft:6}}>祝日</span>}
+                    {has5(selDay)&&<span style={{fontSize:10,color:"#f59e0b",background:"#fef9c3",padding:"2px 6px",borderRadius:8,marginLeft:4}}>5のつく日</span>}
                   </div>
-                  <button onClick={()=>{setSpotForm(f=>({...f,date:`${mk}-${String(selDay).padStart(2,"0")}`}));setShowAddSpot(true);}}
-                    style={{fontSize:12, color:"#3b82f6", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8, padding:"4px 10px", cursor:"pointer",...F}}>＋ 追加</button>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>{setSubForm(f=>({...f,date:`${mk}-${String(selDay).padStart(2,"0")}`}));setShowAddSub(true);}}
+                      style={{fontSize:11,color:"#10b981",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"4px 8px",cursor:"pointer",...F}}>🔄 代行</button>
+                    <button onClick={()=>{setSpotForm(f=>({...f,date:`${mk}-${String(selDay).padStart(2,"0")}`}));setShowAddSpot(true);}}
+                      style={{fontSize:11,color:"#3b82f6",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"4px 8px",cursor:"pointer",...F}}>＋ 追加</button>
+                  </div>
                 </div>
 
-                {/* paydays */}
-                {paydayMap[selDay]?.map(g => (
-                  <div key={g.id} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", background:"#fffbeb", borderRadius:10, marginBottom:8, border:"1px solid #fde68a"}}>
+                {paydayMap[selDay]?.map(g=>(
+                  <div key={g.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#fffbeb",borderRadius:10,marginBottom:8,border:"1px solid #fde68a"}}>
                     <div><div style={{fontSize:13,fontWeight:700}}>💴 {g.name}</div><div style={{fontSize:11,color:"#94a3b8"}}>給料日</div></div>
                     <div style={{fontSize:15,fontWeight:700,color:"#f59e0b",fontFamily:"'DM Mono',monospace"}}>¥{g.inc.toLocaleString()}</div>
                   </div>
                 ))}
 
-                {/* lessons with skip toggle */}
-                {allLessonsByDate.map(l => {
-                  const skipped  = isSkipped(l.id, selDay);
-                  const holiday  = l.holiday5 && has5(selDay);
-                  const cat      = CATEGORIES[l.category];
-                  const lg       = getLog(l.id);
-                  const dayInc   = lessonIncome(l) / Math.max(1, lg.count);
+                {allLessonsByDate.map(l=>{
+                  const skipped = isSkipped(l.id,selDay);
+                  const rest    = isRestDay(l,selDay);
+                  const cat     = CATEGORIES[l.category];
+                  const fee     = getLessonFee(l);
                   return (
-                    <div key={l.id} onClick={()=>!holiday&&toggleSkip(l.id,selDay)}
-                      style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:skipped||holiday?"#f8fafc":cat.color+"10", borderRadius:10, marginBottom:8, border:`1px solid ${skipped||holiday?"#e2e8f0":cat.color+"30"}`, cursor:holiday?"default":"pointer", opacity:skipped||holiday?0.5:1}}>
+                    <div key={l.id} onClick={()=>!rest&&toggleSkip(l.id,selDay)}
+                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:skipped||rest?"#f8fafc":cat.color+"10",borderRadius:10,marginBottom:8,border:`1px solid ${skipped||rest?"#e2e8f0":cat.color+"30"}`,cursor:rest?"default":"pointer",opacity:skipped||rest?0.5:1}}>
                       <div>
                         <div style={{fontSize:13,fontWeight:600}}>{cat.icon} {l.place}</div>
-                        <div style={{fontSize:11,color:"#94a3b8"}}>{l.time} {l.freq}</div>
+                        <div style={{fontSize:11,color:"#94a3b8"}}>{l.startTime&&l.endTime?`${l.startTime}〜${l.endTime}`:""} {l.freq}</div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:13,fontWeight:700,color:skipped||holiday?"#94a3b8":cat.color,fontFamily:"'DM Mono',monospace"}}>¥{Math.round(dayInc).toLocaleString()}</div>
-                        <div style={{fontSize:10,color:skipped?"#ef4444":holiday?"#f59e0b":"#94a3b8"}}>{holiday?"🏢休館日":skipped?"✕ 休み":"タップで休み"}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:skipped||rest?"#94a3b8":cat.color,fontFamily:"'DM Mono',monospace"}}>¥{fee.toLocaleString()}</div>
+                        <div style={{fontSize:10,color:skipped?"#ef4444":rest?"#f59e0b":"#94a3b8"}}>{rest?`🏢${rest}`:skipped?"✕ 休み":"タップで休み"}</div>
                       </div>
                     </div>
                   );
                 })}
 
-                {/* spots */}
-                {spotsByDate[selDay]?.map(e => (
-                  <div key={e.id} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", background:"#fef2f2", borderRadius:10, marginBottom:8, border:"1px solid #fecaca"}}>
+                {subsByDate[selDay]?.map(e=>(
+                  <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#f0fdf4",borderRadius:10,marginBottom:8,border:"1px solid #bbf7d0"}}>
+                    <div><div style={{fontSize:13,fontWeight:600}}>🔄 代行：{e.place}</div>{e.note&&<div style={{fontSize:11,color:"#94a3b8"}}>{e.note}</div>}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:13,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>¥{(e.fee??0).toLocaleString()}</span>
+                      <button onClick={()=>{setSubs(p=>p.filter(x=>x.id!==e.id));flash();}} style={delBtn}>削除</button>
+                    </div>
+                  </div>
+                ))}
+
+                {spotsByDate[selDay]?.map(e=>(
+                  <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#fef2f2",borderRadius:10,marginBottom:8,border:"1px solid #fecaca"}}>
                     <div><div style={{fontSize:13,fontWeight:600}}>🎯 {e.name}</div>{e.note&&<div style={{fontSize:11,color:"#94a3b8"}}>{e.note}</div>}</div>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:13,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>¥{Number(e.amount).toLocaleString()}</span>
@@ -374,9 +440,8 @@ export default function App() {
                   </div>
                 ))}
 
-                {/* expenses */}
-                {expensesByDate[selDay]?.map(e => (
-                  <div key={e.id} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", background:"#f0fdf4", borderRadius:10, marginBottom:8, border:"1px solid #bbf7d0"}}>
+                {expensesByDate[selDay]?.map(e=>(
+                  <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#fef2f2",borderRadius:10,marginBottom:8,border:"1px solid #fecaca"}}>
                     <div><div style={{fontSize:13,fontWeight:600}}>💸 {e.category}</div>{e.note&&<div style={{fontSize:11,color:"#94a3b8"}}>{e.note}</div>}</div>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:13,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>-¥{Number(e.amount).toLocaleString()}</span>
@@ -385,7 +450,7 @@ export default function App() {
                   </div>
                 ))}
 
-                {allLessonsByDate.length===0&&!paydayMap[selDay]&&!spotsByDate[selDay]&&!expensesByDate[selDay]&&(
+                {allLessonsByDate.length===0&&!paydayMap[selDay]&&!spotsByDate[selDay]&&!subsByDate[selDay]&&!expensesByDate[selDay]&&(
                   <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"10px 0"}}>この日は予定なし</div>
                 )}
 
@@ -396,16 +461,15 @@ export default function App() {
               </div>
             )}
 
-            {/* payday schedule */}
-            {payGroups.length > 0 && (
-              <div style={{background:"white", borderRadius:16, padding:16, boxShadow:"0 2px 12px #00000012"}}>
+            {payGroups.length>0&&(
+              <div style={{background:"white",borderRadius:16,padding:16,boxShadow:"0 2px 12px #00000012"}}>
                 <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12}}>📅 今月の給料日スケジュール</div>
-                {Object.entries(paydayMap).sort((a,b)=>Number(a[0])-Number(b[0])).map(([day,gs]) =>
-                  gs.map(g => {
-                    const isPast = Number(day)<today.getDate()&&calMonth===today.getMonth()+1&&calYear===today.getFullYear();
+                {Object.entries(paydayMap).sort((a,b)=>Number(a[0])-Number(b[0])).map(([day,gs])=>
+                  gs.map(g=>{
+                    const isPast=Number(day)<today.getDate()&&calMonth===today.getMonth()+1&&calYear===today.getFullYear();
                     return (
                       <div key={g.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"1px solid #f1f5f9",opacity:isPast?0.5:1}}>
-                        <div style={{width:36,height:36,borderRadius:10,background:"#fef9c3",border:"1.5px solid #f59e0b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <div style={{width:36,height:36,borderRadius:10,background:"#fffbeb",border:"1.5px solid #f59e0b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                           <span style={{fontSize:12,fontWeight:700,color:"#f59e0b",fontFamily:"'DM Mono',monospace"}}>{day}</span>
                         </div>
                         <div style={{flex:1}}>
@@ -422,42 +486,35 @@ export default function App() {
           </div>
         )}
 
-        {/* ════════ INPUT ════════ */}
-        {tab==="input" && (
+        {/* ══ INPUT ══ */}
+        {tab==="input"&&(
           <div>
             <div style={{fontSize:12,color:"#64748b",marginBottom:14}}>人数・時間で変わるレッスンを入力 👇</div>
-
-            {/* circle / part lessons */}
-            {lessons.filter(l=>l.category==="circle"||l.category==="part").map(l => {
-              const cat = CATEGORIES[l.category];
-              const lg  = getLog(l.id);
-              const inc = lessonIncome(l);
+            {lessons.filter(l=>l.category==="circle"||l.category==="part").map(l=>{
+              const cat=CATEGORIES[l.category];
+              const lg=getLog(l.id);
+              const inc=lessonIncome(l);
               return (
                 <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-                    <div>
-                      <div style={{fontSize:14,fontWeight:700}}>{cat.icon} {l.place}</div>
-                      <div style={{fontSize:11,color:"#94a3b8"}}>{l.time&&<span style={{marginRight:6}}>{l.time}</span>}<span style={{color:"#f59e0b"}}>{l.freq}</span></div>
-                    </div>
+                    <div><div style={{fontSize:14,fontWeight:700}}>{cat.icon} {l.place}</div><div style={{fontSize:11,color:"#94a3b8"}}>{l.startTime&&l.endTime?`${l.startTime}〜${l.endTime} · `:""}<span style={{color:"#f59e0b"}}>{l.freq}</span></div></div>
                     <div style={{fontSize:18,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
                   </div>
-
-                  {/* sessions */}
-                  {Array.from({length: lg.count ?? 1}).map((_,si) => (
+                  {Array.from({length:lg.count??1}).map((_,si)=>(
                     <div key={si} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
                       <div style={{fontSize:12,color:"#94a3b8",minWidth:50}}>{si+1}回目</div>
-                      {l.category==="circle" ? <>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sess=cur.peopleSessions??Array(cur.count).fill(l.defaultPeople);sess[si]=Math.max(1,(sess[si]??l.defaultPeople)-1);return{...p,[l.id]:{...cur,peopleSessions:sess,people:sess[si]}};});flash();}} style={cBtn}>－</button>
-                        <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(lg.peopleSessions?.[si]??l.defaultPeople)}</span>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sess=cur.peopleSessions??Array(cur.count).fill(l.defaultPeople);sess[si]=(sess[si]??l.defaultPeople)+1;return{...p,[l.id]:{...cur,peopleSessions:sess,people:sess[si]}};});flash();}} style={cBtn}>＋</button>
+                      {l.category==="circle"?<>
+                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.peopleSessions??Array(cur.count??1).fill(l.defaultPeople))];s[si]=Math.max(1,(s[si]??l.defaultPeople)-1);return{...p,[l.id]:{...cur,peopleSessions:s}};});flash();}} style={cBtn}>－</button>
+                        <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(getLog(l.id).peopleSessions?.[si]??l.defaultPeople)}</span>
+                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.peopleSessions??Array(cur.count??1).fill(l.defaultPeople))];s[si]=(s[si]??l.defaultPeople)+1;return{...p,[l.id]:{...cur,peopleSessions:s}};});flash();}} style={cBtn}>＋</button>
                         <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
-                        <span style={{fontSize:12,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((lg.peopleSessions?.[si]??l.defaultPeople)*l.unitPrice).toLocaleString()}</span>
-                      </> : <>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sess=cur.hoursSessions??Array(cur.count).fill(1);sess[si]=Math.max(0.5,((sess[si]??1)-0.5));return{...p,[l.id]:{...cur,hoursSessions:sess}};});flash();}} style={cBtn}>－</button>
-                        <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(lg.hoursSessions?.[si]??1)}</span>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sess=cur.hoursSessions??Array(cur.count).fill(1);sess[si]=(sess[si]??1)+0.5;return{...p,[l.id]:{...cur,hoursSessions:sess}};});flash();}} style={cBtn}>＋</button>
+                        <span style={{fontSize:12,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((getLog(l.id).peopleSessions?.[si]??l.defaultPeople)*l.unitPrice).toLocaleString()}</span>
+                      </>:<>
+                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.hoursSessions??Array(cur.count??1).fill(1))];s[si]=Math.max(0.5,(s[si]??1)-0.5);return{...p,[l.id]:{...cur,hoursSessions:s}};});flash();}} style={cBtn}>－</button>
+                        <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(getLog(l.id).hoursSessions?.[si]??1)}</span>
+                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.hoursSessions??Array(cur.count??1).fill(1))];s[si]=(s[si]??1)+0.5;return{...p,[l.id]:{...cur,hoursSessions:s}};});flash();}} style={cBtn}>＋</button>
                         <span style={{fontSize:12,color:"#94a3b8"}}>時間</span>
-                        <span style={{fontSize:12,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((lg.hoursSessions?.[si]??1)*l.hourlyRate).toLocaleString()}</span>
+                        <span style={{fontSize:12,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((getLog(l.id).hoursSessions?.[si]??1)*l.hourlyRate).toLocaleString()}</span>
                       </>}
                     </div>
                   ))}
@@ -468,15 +525,8 @@ export default function App() {
                 </div>
               );
             })}
+            {lessons.filter(l=>l.category==="circle"||l.category==="part").length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:13}}><div style={{fontSize:32,marginBottom:8}}>👥</div>⚙️ レッスン管理から追加してね</div>}
 
-            {lessons.filter(l=>l.category==="circle"||l.category==="part").length===0&&(
-              <div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:13}}>
-                <div style={{fontSize:32,marginBottom:8}}>👥</div>
-                サークル・アルバイトがまだ登録されていないよ！<br/>⚙️ レッスン管理から追加してね
-              </div>
-            )}
-
-            {/* subscription */}
             <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:"1px solid #10b98120"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <div><div style={{fontSize:14,fontWeight:700}}>📱 ENARIZE MEMBERS</div><div style={{fontSize:11,color:"#94a3b8"}}>サブスク · ¥1,000/月</div></div>
@@ -493,76 +543,62 @@ export default function App() {
           </div>
         )}
 
-        {/* ════════ EXPENSES ════════ */}
-        {tab==="expenses" && (
+        {/* ══ EXPENSES ══ */}
+        {tab==="expenses"&&(
           <div>
             <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:700,color:"#64748b"}}>今月の支出合計</div>
-                  <div style={{fontSize:26,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>¥{totalExpenses.toLocaleString()}</div>
-                </div>
+                <div><div style={{fontSize:13,fontWeight:700,color:"#64748b"}}>今月の支出合計</div><div style={{fontSize:26,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>¥{totalExpenses.toLocaleString()}</div></div>
                 <button onClick={()=>setShowAddExpense(true)} style={{padding:"8px 14px",borderRadius:10,border:"none",background:"#3b82f6",color:"white",fontWeight:700,fontSize:13,cursor:"pointer",...F}}>＋ 追加</button>
               </div>
-              {EXPENSE_CATS.map(cat => {
-                const total = expenses.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0);
-                if (!total) return null;
-                return (
-                  <div key={cat} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:EXPENSE_COLORS[cat]}}/><span style={{fontSize:13}}>{cat}</span></div>
-                    <span style={{fontSize:13,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>¥{total.toLocaleString()}</span>
-                  </div>
-                );
+              {EXPENSE_CATS.map(cat=>{
+                const total=expenses.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0);
+                if(!total) return null;
+                return <div key={cat} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:EXPENSE_COLORS[cat]}}/><span style={{fontSize:13}}>{cat}</span></div><span style={{fontSize:13,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>¥{total.toLocaleString()}</span></div>;
               })}
             </div>
             {expenses.length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:14}}><div style={{fontSize:36,marginBottom:8}}>💸</div>支出がまだないよ！</div>}
             {[...expenses].sort((a,b)=>a.date.localeCompare(b.date)).map(e=>(
               <div key={e.id} style={{background:"white",borderRadius:12,padding:"12px 16px",marginBottom:8,boxShadow:"0 1px 6px #00000010",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}><div style={{width:8,height:8,borderRadius:"50%",background:EXPENSE_COLORS[e.category]}}/><span style={{fontSize:13,fontWeight:700}}>{e.category}</span></div>
-                  <div style={{fontSize:11,color:"#94a3b8"}}>{e.date.split("-").slice(1).join("/")} {e.note&&`· ${e.note}`}</div>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:15,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>¥{Number(e.amount).toLocaleString()}</span>
-                  <button onClick={()=>{setExpenses(p=>p.filter(x=>x.id!==e.id));flash();}} style={delBtn}>削除</button>
-                </div>
+                <div><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}><div style={{width:8,height:8,borderRadius:"50%",background:EXPENSE_COLORS[e.category]}}/><span style={{fontSize:13,fontWeight:700}}>{e.category}</span></div><div style={{fontSize:11,color:"#94a3b8"}}>{e.date.split("-").slice(1).join("/")} {e.note&&`· ${e.note}`}</div></div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:15,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>¥{Number(e.amount).toLocaleString()}</span><button onClick={()=>{setExpenses(p=>p.filter(x=>x.id!==e.id));flash();}} style={delBtn}>削除</button></div>
               </div>
             ))}
           </div>
         )}
 
-        {/* ════════ LESSONS MANAGEMENT ════════ */}
-        {tab==="lessons" && (
+        {/* ══ LESSONS ══ */}
+        {tab==="lessons"&&(
           <div>
             <button onClick={()=>{setEditLesson(null);setLForm(blankLesson);setShowAddLesson(true);}}
               style={{width:"100%",padding:14,borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:14,...F}}>
               ＋ レッスンを追加する
             </button>
-
-            {Object.entries(CATEGORIES).map(([key,cat]) => {
-              const ls = lessons.filter(l=>l.category===key);
-              if (!ls.length) return null;
+            {Object.entries(CATEGORIES).filter(([k])=>k!=="sub").map(([key,cat])=>{
+              const ls=lessons.filter(l=>l.category===key);
+              if(!ls.length) return null;
               return (
                 <div key={key} style={{marginBottom:20}}>
                   <div style={{fontSize:13,fontWeight:700,color:cat.color,marginBottom:8}}>{cat.icon} {cat.label}</div>
-                  {ls.map(l => (
+                  {ls.map(l=>(
                     <div key={l.id} style={{background:"white",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px #00000010",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
                         <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{l.place}</div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>
-                          {SCHED_DAYS[l.day]}曜{l.time&&` ${l.time}`} · <span style={{color:"#f59e0b"}}>{l.freq}</span>
+                          {SCHED_DAYS[l.day]}曜{l.startTime&&l.endTime?` ${l.startTime}〜${l.endTime}`:""} · <span style={{color:"#f59e0b"}}>{l.freq}</span>
                           {l.holiday5&&<span style={{marginLeft:4,color:"#f59e0b",fontSize:10}}>🏢5の日休</span>}
+                          {l.holidayOff&&<span style={{marginLeft:4,color:"#db2777",fontSize:10}}>🎌祝日休</span>}
                         </div>
-                        <div style={{fontSize:11,fontWeight:700,color:cat.color,marginTop:2,fontFamily:"'DM Mono',monospace"}}>
-                          {key==="regular"&&`¥${l.fee.toLocaleString()}/回`}
+                        <div style={{fontSize:12,fontWeight:700,color:cat.color,marginTop:2,fontFamily:"'DM Mono',monospace"}}>
+                          {key==="regular"&&`¥${getLessonFee(l).toLocaleString()}/回`}
                           {key==="circle"&&`¥${l.unitPrice.toLocaleString()}/人`}
                           {key==="part"&&`¥${l.hourlyRate.toLocaleString()}/時間`}
-                          {key==="event"&&`¥${l.fee.toLocaleString()}`}
+                          {key==="event"&&`¥${getLessonFee(l).toLocaleString()}`}
+                          {l.feeMode==="calc"&&<span style={{fontSize:10,color:"#94a3b8",marginLeft:4}}>（時給計算）</span>}
                         </div>
                       </div>
                       <div style={{display:"flex",gap:6}}>
-                        <button onClick={()=>{setEditLesson(l.id);setLForm({...l});setShowAddLesson(true);}}
-                          style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"4px 10px",color:"#3b82f6",fontSize:12,cursor:"pointer",...F}}>編集</button>
+                        <button onClick={()=>{setEditLesson(l.id);setLForm({...l});setShowAddLesson(true);}} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"4px 10px",color:"#3b82f6",fontSize:12,cursor:"pointer",...F}}>編集</button>
                         <button onClick={()=>deleteLesson(l.id)} style={delBtn}>削除</button>
                       </div>
                     </div>
@@ -570,15 +606,8 @@ export default function App() {
                 </div>
               );
             })}
+            {lessons.length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:13}}><div style={{fontSize:40,marginBottom:8}}>📋</div>まだレッスンが登録されていないよ！<br/>上のボタンから追加してね</div>}
 
-            {lessons.length===0&&(
-              <div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:13}}>
-                <div style={{fontSize:40,marginBottom:8}}>📋</div>
-                まだレッスンが登録されていないよ！<br/>上のボタンから追加してね
-              </div>
-            )}
-
-            {/* Pay groups */}
             <div style={{height:1,background:"#e2e8f0",margin:"20px 0"}}/>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{fontSize:13,fontWeight:700,color:"#f59e0b"}}>💴 給料グループ</div>
@@ -587,34 +616,21 @@ export default function App() {
             {payGroups.length===0&&<div style={{fontSize:12,color:"#94a3b8",textAlign:"center",padding:"16px 0"}}>給料グループを追加すると<br/>カレンダーに給料日が表示されるよ！</div>}
             {payGroups.map(g=>(
               <div key={g.id} style={{background:"white",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px #00000010",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:600}}>{g.name}</div>
-                  <div style={{fontSize:11,color:"#94a3b8"}}>毎月{g.payDay===0?"末日":`${g.payDay}日`}払い · {g.lessonIds?.length??0}件のレッスン</div>
-                </div>
+                <div><div style={{fontSize:13,fontWeight:600}}>{g.name}</div><div style={{fontSize:11,color:"#94a3b8"}}>毎月{g.payDay===0?"末日":`${g.payDay}日`}払い · {g.lessonIds?.length??0}件</div></div>
                 <button onClick={()=>{if(window.confirm("削除しますか？"))setPayGroups(p=>p.filter(x=>x.id!==g.id));}} style={delBtn}>削除</button>
               </div>
             ))}
           </div>
         )}
 
-        {/* ════════ ANALYSIS ════════ */}
-        {tab==="analysis" && (
+        {/* ══ ANALYSIS ══ */}
+        {tab==="analysis"&&(
           <div>
             <div style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
               <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:14}}>📊 収入内訳</div>
-              {[...Object.entries(CATEGORIES).map(([key,cat])=>[cat.label,lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),
-                ["サブスク",subIncome,"#10b981"],["スポット",spotIncome,"#ef4444"]
-              ].filter(([,v])=>v>0).map(([l,v,c])=>{
-                const pct = totalIncome>0?v/totalIncome*100:0;
-                return (
-                  <div key={l} style={{marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                      <span style={{fontSize:12}}>{l}</span>
-                      <span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:c}}>¥{v.toLocaleString()} <span style={{color:"#94a3b8",fontSize:10}}>({pct.toFixed(0)}%)</span></span>
-                    </div>
-                    <div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:`${pct}%`,background:c,borderRadius:4}}/></div>
-                  </div>
-                );
+              {[...Object.entries(CATEGORIES).map(([key,cat])=>[cat.label,key==="sub"?subsIncome:lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),["サブスク",subIncome,"#10b981"],["スポット",spotIncome,"#64748b"]].filter(([,v])=>v>0).map(([l,v,c])=>{
+                const pct=totalIncome>0?v/totalIncome*100:0;
+                return <div key={l} style={{marginBottom:12}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12}}>{l}</span><span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:c}}>¥{v.toLocaleString()} <span style={{color:"#94a3b8",fontSize:10}}>({pct.toFixed(0)}%)</span></span></div><div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:`${pct}%`,background:c,borderRadius:4}}/></div></div>;
               })}
             </div>
             <div style={{background:"white",borderRadius:16,padding:16,boxShadow:"0 2px 12px #00000012"}}>
@@ -630,15 +646,13 @@ export default function App() {
         )}
       </div>
 
-      {/* ════════ MODALS ════════ */}
+      {/* ══ MODALS ══ */}
 
-      {/* Add/Edit lesson */}
       {showAddLesson&&(
         <Modal onClose={()=>{setShowAddLesson(false);setEditLesson(null);setLForm(blankLesson);}} title={editLesson?"✏️ レッスンを編集":"➕ レッスンを追加"} color="#3b82f6">
-          {/* category */}
           <Label>カテゴリ</Label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-            {Object.entries(CATEGORIES).map(([key,cat])=>(
+            {Object.entries(CATEGORIES).filter(([k])=>k!=="sub").map(([key,cat])=>(
               <button key={key} onClick={()=>setLForm(f=>({...f,category:key}))}
                 style={{padding:"10px 8px",borderRadius:10,border:lForm.category===key?`2px solid ${cat.color}`:"2px solid #e2e8f0",background:lForm.category===key?cat.color+"15":"white",color:lForm.category===key?cat.color:"#64748b",fontSize:12,cursor:"pointer",textAlign:"left",...F}}>
                 <div style={{fontWeight:700}}>{cat.icon} {cat.label}</div>
@@ -648,6 +662,7 @@ export default function App() {
           </div>
 
           <Label>場所名</Label><LInput value={lForm.place} onChange={v=>setLForm(f=>({...f,place:v}))} placeholder="例：○○体育館"/>
+
           <Label>曜日</Label>
           <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
             {SCHED_DAYS.map((d,i)=>(
@@ -655,9 +670,35 @@ export default function App() {
                 style={{padding:"6px 12px",borderRadius:8,border:Number(lForm.day)===i?"2px solid #3b82f6":"2px solid #e2e8f0",background:Number(lForm.day)===i?"#eff6ff":"white",color:Number(lForm.day)===i?"#3b82f6":"#64748b",fontSize:12,cursor:"pointer",...F}}>{d}</button>
             ))}
           </div>
-          <Label>時間（任意）</Label><LInput value={lForm.time} onChange={v=>setLForm(f=>({...f,time:v}))} placeholder="例：10:00-11:00"/>
 
-          {(lForm.category==="regular"||lForm.category==="event")&&<><Label>1回の報酬（円）</Label><LInput type="number" value={lForm.fee} onChange={v=>setLForm(f=>({...f,fee:v}))} placeholder="例：3000"/></>}
+          <Label>開始時間</Label>
+          <TimeSelect value={lForm.startTime} onChange={v=>setLForm(f=>({...f,startTime:v}))} placeholder="開始"/>
+          <Label>終了時間</Label>
+          <TimeSelect value={lForm.endTime} onChange={v=>setLForm(f=>({...f,endTime:v}))} placeholder="終了"/>
+
+          {/* fee mode */}
+          {(lForm.category==="regular"||lForm.category==="event")&&(
+            <>
+              <Label>報酬の計算方法</Label>
+              <div style={{display:"flex",gap:8,marginBottom:14}}>
+                {[["fixed","金額を直接入力"],["calc","時給×実分数で計算"]].map(([mode,label])=>(
+                  <button key={mode} onClick={()=>setLForm(f=>({...f,feeMode:mode}))}
+                    style={{flex:1,padding:"8px",borderRadius:8,border:lForm.feeMode===mode?"2px solid #3b82f6":"2px solid #e2e8f0",background:lForm.feeMode===mode?"#eff6ff":"white",color:lForm.feeMode===mode?"#3b82f6":"#64748b",fontSize:11,cursor:"pointer",...F}}>{label}</button>
+                ))}
+              </div>
+              {lForm.feeMode==="fixed"
+                ? <><Label>1回の報酬（円）</Label><LInput type="number" value={lForm.fee} onChange={v=>setLForm(f=>({...f,fee:v}))} placeholder="例：3000"/></>
+                : <><Label>時給（円）</Label><LInput type="number" value={lForm.hourlyRate} onChange={v=>setLForm(f=>({...f,hourlyRate:v}))} placeholder="例：4000"/>
+                    {lForm.startTime&&lForm.endTime&&Number(lForm.hourlyRate)>0&&(
+                      <div style={{background:"#eff6ff",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:"#3b82f6",fontWeight:700}}>
+                        計算結果：¥{calcFeeFromTime(lForm.startTime,lForm.endTime,Number(lForm.hourlyRate)).toLocaleString()}
+                        <span style={{fontSize:10,color:"#94a3b8",marginLeft:6}}>（{lForm.startTime}〜{lForm.endTime}）</span>
+                      </div>
+                    )}
+                  </>
+              }
+            </>
+          )}
           {lForm.category==="circle"&&<><Label>1人あたりの単価（円）</Label><LInput type="number" value={lForm.unitPrice} onChange={v=>setLForm(f=>({...f,unitPrice:v}))} placeholder="例：1500"/><Label>デフォルト人数</Label><LInput type="number" value={lForm.defaultPeople} onChange={v=>setLForm(f=>({...f,defaultPeople:v}))} placeholder="例：10"/></>}
           {lForm.category==="part"&&<><Label>時給（円）</Label><LInput type="number" value={lForm.hourlyRate} onChange={v=>setLForm(f=>({...f,hourlyRate:v}))} placeholder="例：1200"/></>}
 
@@ -669,12 +710,17 @@ export default function App() {
             ))}
           </div>
 
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderTop:"1px solid #f1f5f9",marginBottom:14}}>
-            <span style={{fontSize:13,color:"#64748b"}}>🏢 5のつく日は休館日</span>
-            <button onClick={()=>setLForm(f=>({...f,holiday5:!f.holiday5}))}
-              style={{width:48,height:26,borderRadius:13,background:lForm.holiday5?"#3b82f6":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
-              <div style={{width:20,height:20,borderRadius:"50%",background:"white",position:"absolute",top:3,left:lForm.holiday5?25:3,transition:"left 0.2s"}}/>
-            </button>
+          <div style={{borderTop:"1px solid #f1f5f9",paddingTop:12,marginBottom:14}}>
+            <Label>休館日設定</Label>
+            {[["holiday5","🏢 5のつく日は休館日"],["holidayOff","🎌 祝日は休み"]].map(([key,label])=>(
+              <div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <span style={{fontSize:13,color:"#64748b"}}>{label}</span>
+                <button onClick={()=>setLForm(f=>({...f,[key]:!f[key]}))}
+                  style={{width:48,height:26,borderRadius:13,background:lForm[key]?"#3b82f6":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+                  <div style={{width:20,height:20,borderRadius:"50%",background:"white",position:"absolute",top:3,left:lForm[key]?25:3,transition:"left 0.2s"}}/>
+                </button>
+              </div>
+            ))}
           </div>
 
           <button onClick={saveLesson} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>
@@ -683,7 +729,27 @@ export default function App() {
         </Modal>
       )}
 
-      {/* Add spot */}
+      {showAddSub&&(
+        <Modal onClose={()=>setShowAddSub(false)} title="🔄 代行を追加" color="#10b981">
+          <Label>ジムを選ぶ（登録済みから）</Label>
+          <select value={subForm.lessonId} onChange={e=>setSubForm(f=>({...f,lessonId:e.target.value}))}
+            style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:14,marginBottom:14,boxSizing:"border-box",...F}}>
+            <option value="">選んでください</option>
+            {lessons.map(l=>(
+              <option key={l.id} value={l.id}>{CATEGORIES[l.category].icon} {l.place}（¥{getLessonFee(l).toLocaleString()}）</option>
+            ))}
+          </select>
+          {subForm.lessonId&&(
+            <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:"#10b981",fontWeight:700}}>
+              報酬：¥{getLessonFee(lessons.find(l=>l.id===Number(subForm.lessonId)||l.id===subForm.lessonId)||{}).toLocaleString()}
+            </div>
+          )}
+          <Label>日付</Label><LInput type="date" value={subForm.date} onChange={v=>setSubForm(f=>({...f,date:v}))}/>
+          <Label>メモ（任意）</Label><LInput value={subForm.note} onChange={v=>setSubForm(f=>({...f,note:v}))} placeholder="例：急遽依頼"/>
+          <button onClick={saveSub} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"#10b981",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>追加する</button>
+        </Modal>
+      )}
+
       {showAddSpot&&(
         <Modal onClose={()=>setShowAddSpot(false)} title="🎯 スポット収入を追加" color="#ef4444">
           <Label>名前</Label><LInput value={spotForm.name} onChange={v=>setSpotForm(f=>({...f,name:v}))} placeholder="例：特別イベント"/>
@@ -694,7 +760,6 @@ export default function App() {
         </Modal>
       )}
 
-      {/* Add expense */}
       {showAddExpense&&(
         <Modal onClose={()=>setShowAddExpense(false)} title="💸 支出を追加" color="#10b981">
           <Label>カテゴリ</Label>
@@ -711,7 +776,6 @@ export default function App() {
         </Modal>
       )}
 
-      {/* Add pay group */}
       {showAddPayGroup&&(
         <Modal onClose={()=>setShowAddPayGroup(false)} title="💴 給料グループを追加" color="#f59e0b">
           <Label>グループ名</Label><LInput value={pgForm.name} onChange={v=>setPgForm(f=>({...f,name:v}))} placeholder="例：ビックカメラ"/>
@@ -746,10 +810,17 @@ function Modal({onClose,title,color,children}){
     </div>
   );
 }
-function Label({children}){ return <div style={{fontSize:12,color:"#64748b",marginBottom:6,fontFamily:"'Noto Sans JP',sans-serif"}}>{children}</div>; }
+function Label({children}){ return <div style={{fontSize:12,color:"#64748b",marginBottom:6,...F}}>{children}</div>; }
 function LInput({value,onChange,placeholder,type="text"}){
   return <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-    style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:14,marginBottom:14,boxSizing:"border-box",fontFamily:"'Noto Sans JP',sans-serif",outline:"none"}}/>;
+    style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:14,marginBottom:14,boxSizing:"border-box",...F,outline:"none"}}/>;
 }
-const cBtn = {width:36,height:36,borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"};
-const delBtn = {background:"#fee2e2",border:"none",borderRadius:6,padding:"4px 10px",color:"#ef4444",fontSize:12,cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif"};
+function TimeSelect({value,onChange,placeholder}){
+  return (
+    <select value={value} onChange={e=>onChange(e.target.value)}
+      style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:value?"#1e293b":"#94a3b8",fontSize:14,marginBottom:14,boxSizing:"border-box",...F}}>
+      <option value="">{placeholder}</option>
+      {TIME_OPTIONS.filter(t=>t).map(t=><option key={t} value={t}>{t}</option>)}
+    </select>
+  );
+}
