@@ -122,10 +122,10 @@ export default function App() {
 
   // lesson fee calculation
   const getLessonFee = useCallback((l) => {
-    if (l.feeMode === "calc" && l.startTime && l.endTime && l.hourlyRate) {
-      return calcFeeFromTime(l.startTime, l.endTime, l.hourlyRate);
-    }
-    return l.fee ?? 0;
+    const base = l.feeMode === "calc" && l.startTime && l.endTime && l.hourlyRate
+      ? calcFeeFromTime(l.startTime, l.endTime, l.hourlyRate)
+      : (l.fee ?? 0);
+    return base + (Number(l.transport) || 0);
   }, []);
 
   const getLog = useCallback((id) => {
@@ -234,7 +234,7 @@ export default function App() {
   }, [calYear, calMonth, lessons, logs]);
 
   // forms
-  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed" };
+  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"" };
   const [lForm, setLForm] = useState(blankLesson);
   const [editLesson, setEditLesson] = useState(null);
   const [showAddLesson,  setShowAddLesson]  = useState(false);
@@ -702,6 +702,8 @@ export default function App() {
           )}
           {lForm.category==="circle"&&<><Label>1人あたりの単価（円）</Label><LInput type="number" value={lForm.unitPrice} onChange={v=>setLForm(f=>({...f,unitPrice:v}))} placeholder="例：1500"/><Label>デフォルト人数</Label><LInput type="number" value={lForm.defaultPeople} onChange={v=>setLForm(f=>({...f,defaultPeople:v}))} placeholder="例：10"/></>}
           {lForm.category==="part"&&<><Label>時給（円）</Label><LInput type="number" value={lForm.hourlyRate} onChange={v=>setLForm(f=>({...f,hourlyRate:v}))} placeholder="例：1200"/></>}
+
+          <Label>交通費支給（円/回）</Label><LInput type="number" value={lForm.transport||""} onChange={v=>setLForm(f=>({...f,transport:v}))} placeholder="例：500（支給なしは空欄）"/>
 
           <Label>頻度</Label>
           <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
