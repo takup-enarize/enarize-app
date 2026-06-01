@@ -234,7 +234,7 @@ export default function App() {
   }, [calYear, calMonth, lessons, logs]);
 
   // forms
-  const blankLesson = { category:"regular", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed" };
+  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed" };
   const [lForm, setLForm] = useState(blankLesson);
   const [editLesson, setEditLesson] = useState(null);
   const [showAddLesson,  setShowAddLesson]  = useState(false);
@@ -409,7 +409,7 @@ export default function App() {
                     <div key={l.id} onClick={()=>!rest&&toggleSkip(l.id,selDay)}
                       style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:skipped||rest?"#f8fafc":cat.color+"10",borderRadius:10,marginBottom:8,border:`1px solid ${skipped||rest?"#e2e8f0":cat.color+"30"}`,cursor:rest?"default":"pointer",opacity:skipped||rest?0.5:1}}>
                       <div>
-                        <div style={{fontSize:13,fontWeight:600}}>{cat.icon} {l.place}</div>
+                        <div style={{fontSize:13,fontWeight:600}}>{cat.icon} {l.lessonName&&<span style={{marginRight:4}}>{l.lessonName}</span>}{l.place}</div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>{l.startTime&&l.endTime?`${l.startTime}〜${l.endTime}`:""} {l.freq}</div>
                       </div>
                       <div style={{textAlign:"right"}}>
@@ -497,7 +497,7 @@ export default function App() {
               return (
                 <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-                    <div><div style={{fontSize:14,fontWeight:700}}>{cat.icon} {l.place}</div><div style={{fontSize:11,color:"#94a3b8"}}>{l.startTime&&l.endTime?`${l.startTime}〜${l.endTime} · `:""}<span style={{color:"#f59e0b"}}>{l.freq}</span></div></div>
+                    <div><div style={{fontSize:14,fontWeight:700}}>{cat.icon} {l.lessonName||l.place}</div><div style={{fontSize:11,color:"#94a3b8"}}>{l.place} {l.startTime&&l.endTime?`${l.startTime}〜${l.endTime} · `:""}<span style={{color:"#f59e0b"}}>{l.freq}</span></div></div>
                     <div style={{fontSize:18,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
                   </div>
                   {Array.from({length:lg.count??1}).map((_,si)=>(
@@ -583,7 +583,7 @@ export default function App() {
                   {ls.map(l=>(
                     <div key={l.id} style={{background:"white",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px #00000010",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
-                        <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{l.place}</div>
+                        <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{l.lessonName&&<span style={{marginRight:6,color:"#1e293b"}}>{l.lessonName}</span>}<span style={{color:"#64748b"}}>{l.place}</span></div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>
                           {SCHED_DAYS[l.day]}曜{l.startTime&&l.endTime?` ${l.startTime}〜${l.endTime}`:""} · <span style={{color:"#f59e0b"}}>{l.freq}</span>
                           {l.holiday5&&<span style={{marginLeft:4,color:"#f59e0b",fontSize:10}}>🏢5の日休</span>}
@@ -661,7 +661,8 @@ export default function App() {
             ))}
           </div>
 
-          <Label>場所名</Label><LInput value={lForm.place} onChange={v=>setLForm(f=>({...f,place:v}))} placeholder="例：○○体育館"/>
+          <Label>レッスン名</Label><LInput value={lForm.lessonName||""} onChange={v=>setLForm(f=>({...f,lessonName:v}))} placeholder="例：エアロビクス・ヨガ・コンディショニング"/>
+          <Label>場所名（ジム・施設名）</Label><LInput value={lForm.place} onChange={v=>setLForm(f=>({...f,place:v}))} placeholder="例：○○体育館"/>
 
           <Label>曜日</Label>
           <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
