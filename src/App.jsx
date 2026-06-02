@@ -500,11 +500,11 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ INPUT ══ */}
+        {/* ══ INPUT（サークルのみ） ══ */}
         {tab==="input"&&(
           <div>
-            <div style={{fontSize:12,color:"#64748b",marginBottom:14}}>人数・時間で変わるレッスンを入力 👇</div>
-            {lessons.filter(l=>l.category==="circle"||l.category==="part").map(l=>{
+            <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>🏃 サークル・人数入力</div>
+            {lessons.filter(l=>l.category==="circle").map(l=>{
               const cat=CATEGORIES[l.category];
               const lg=getLog(l.id);
               const inc=lessonIncome(l);
@@ -614,7 +614,7 @@ export default function App() {
                 </div>
               );
             })}
-            {lessons.filter(l=>l.category==="circle"||l.category==="part").length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:13}}><div style={{fontSize:32,marginBottom:8}}>👥</div>⚙️ レッスン管理から追加してね</div>}
+            {lessons.filter(l=>l.category==="circle").length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:15}}><div style={{fontSize:36,marginBottom:8}}>👥</div>⚙️ レッスン管理からサークルを追加してね</div>}
 
             <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:"1px solid #10b98120"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -629,6 +629,132 @@ export default function App() {
                 <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ══ PART TIME ══ */}
+        {tab==="parttime"&&(
+          <div>
+            <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>💼 アルバイト シフト管理</div>
+            {lessons.filter(l=>l.category==="part").length===0&&(
+              <div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:15}}>
+                <div style={{fontSize:40,marginBottom:8}}>💼</div>
+                ⚙️ レッスン管理からアルバイトを追加してね
+              </div>
+            )}
+            {lessons.filter(l=>l.category==="part").map(l=>{
+              const cat=CATEGORIES[l.category];
+              const lg=getLog(l.id);
+              const inc=lessonIncome(l);
+              return (
+                <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+                  {/* ヘッダー */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                    <div>
+                      <div style={{fontSize:18,fontWeight:700}}>{cat.icon} {l.lessonName||l.place}</div>
+                      <div style={{fontSize:14,color:"#94a3b8"}}>{l.place} · 時給¥{(l.hourlyRate??0).toLocaleString()}</div>
+                      <div style={{fontSize:13,color:"#f97316",marginTop:2}}>{l.shiftType==="fixed"?"📅 固定シフト":"🔄 シフト制"}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>今月収入</div>
+                      <div style={{fontSize:20,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
+                    </div>
+                  </div>
+
+                  {/* 固定シフト */}
+                  {l.shiftType==="fixed" ? (
+                    <>
+                      <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",marginBottom:12,border:"1px solid #fed7aa"}}>
+                        <div style={{fontSize:14,color:"#64748b",marginBottom:4}}>
+                          {SCHED_DAYS[l.day]}曜 {l.startTime}〜{l.endTime}
+                          {l.startTime&&l.endTime&&<span style={{marginLeft:8,color:"#f97316",fontWeight:600}}>
+                            {Math.floor(calcFeeFromTime(l.startTime,l.endTime,1)/60)}時間{calcFeeFromTime(l.startTime,l.endTime,1)%60>0?`${calcFeeFromTime(l.startTime,l.endTime,1)%60}分`:""}
+                          </span>}
+                        </div>
+                        <div style={{fontSize:16,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
+                          1回 ¥{calcFeeFromTime(l.startTime,l.endTime,l.hourlyRate??0).toLocaleString()}
+                          {l.transportPer==="shift"&&Number(l.transport)>0&&<span style={{fontSize:13,color:"#10b981",marginLeft:6}}>+交通費¥{Number(l.transport).toLocaleString()}</span>}
+                        </div>
+                      </div>
+                      <div style={{fontSize:15,color:"#64748b",marginBottom:10,fontWeight:600}}>今月の出勤回数</div>
+                      <div style={{display:"flex",alignItems:"center",gap:16,background:"#f8fafc",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:Math.max(0,(cur.count??0)-1)}};});flash();}} style={cBtn}>－</button>
+                        <div style={{textAlign:"center",flex:1}}>
+                          <div style={{fontSize:36,fontWeight:700,fontFamily:"'DM Mono',monospace",color:cat.color}}>{lg.count??0}</div>
+                          <div style={{fontSize:13,color:"#94a3b8"}}>回出勤</div>
+                        </div>
+                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:(cur.count??0)+1}};});flash();}} style={cBtn}>＋</button>
+                      </div>
+                      {/* 合計 */}
+                      <div style={{background:"#fff7ed",borderRadius:10,padding:"10px 14px",border:"1px solid #fed7aa"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:14,color:"#64748b"}}>合計勤務時間</span>
+                          <span style={{fontSize:15,fontWeight:700,color:"#f97316"}}>
+                            {Math.floor(calcFeeFromTime(l.startTime,l.endTime,1)/60*(lg.count??0))}時間
+                            {calcFeeFromTime(l.startTime,l.endTime,1)%60>0?`${calcFeeFromTime(l.startTime,l.endTime,1)%60*(lg.count??0)}分`:""}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* シフト制 */}
+                      {(lg.shifts??[]).map((sh,si)=>(
+                        <div key={si} style={{background:"#f8fafc",borderRadius:12,padding:"14px",marginBottom:10,border:"1px solid #e2e8f0"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                            <div style={{fontSize:15,fontWeight:700,color:"#1e293b"}}>シフト {si+1}</div>
+                            <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=(cur.shifts??[]).filter((_,i)=>i!==si);return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:13,cursor:"pointer",...F}}>削除</button>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
+                            <div>
+                              <div style={{fontSize:13,color:"#94a3b8",marginBottom:6}}>開始時間</div>
+                              <TimePicker label="" value={sh.startTime||""} onChange={v=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],startTime:v};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}} compact/>
+                            </div>
+                            <div>
+                              <div style={{fontSize:13,color:"#94a3b8",marginBottom:6}}>終了時間</div>
+                              <TimePicker label="" value={sh.endTime||""} onChange={v=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],endTime:v};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}} compact/>
+                            </div>
+                          </div>
+                          {sh.startTime&&sh.endTime&&(
+                            <div style={{background:"#fff7ed",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between"}}>
+                              <span style={{fontSize:13,color:"#64748b"}}>
+                                {sh.startTime}〜{sh.endTime} · {Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}時間{calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}分`:""}
+                              </span>
+                              <span style={{fontSize:14,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
+                                ¥{(calcFeeFromTime(sh.startTime,sh.endTime,l.hourlyRate??0)+(l.transportPer==="shift"?Number(l.transport||0):0)).toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[]),{startTime:"",endTime:""}];return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}}
+                        style={{width:"100%",padding:"14px",borderRadius:12,border:"1px dashed #f97316",background:"#fff7ed",color:"#f97316",fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:10,...F}}>
+                        ＋ シフトを追加
+                      </button>
+                      {/* 合計 */}
+                      {(lg.shifts??[]).length>0&&(
+                        <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",border:"1px solid #fed7aa"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                            <span style={{fontSize:14,color:"#64748b"}}>合計勤務時間</span>
+                            <span style={{fontSize:15,fontWeight:700,color:"#f97316"}}>
+                              {(()=>{const mins=(lg.shifts??[]).reduce((s,sh)=>s+calcFeeFromTime(sh.startTime,sh.endTime,1),0);return `${Math.floor(mins/60)}時間${mins%60>0?`${mins%60}分`:""}`;})()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* 交通費まとめ支給 */}
+                  {l.transportPer==="month"&&Number(l.transport)>0&&(
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f0fdf4",borderRadius:10,padding:"12px 14px",marginTop:10,border:"1px solid #bbf7d0"}}>
+                      <span style={{fontSize:15,color:"#10b981",fontWeight:700}}>🚗 交通費（月まとめ支給）</span>
+                      <span style={{fontSize:16,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>+¥{Number(l.transport).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -929,7 +1055,7 @@ function LInput({value,onChange,placeholder,type="text"}){
   return <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
     style={{width:"100%",padding:"15px 16px",borderRadius:12,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:18,marginBottom:18,boxSizing:"border-box",...F,outline:"none"}}/>;
 }
-function TimePicker({value, onChange, label}) {
+function TimePicker({value, onChange, label, compact=false}) {
   const [h, setH] = useState(() => value ? parseInt(value.split(":")[0]) : 10);
   const [m, setM] = useState(() => value ? parseInt(value.split(":")[1]) : 0);
   const [enabled, setEnabled] = useState(!!value);
@@ -942,31 +1068,35 @@ function TimePicker({value, onChange, label}) {
     }
   }, [h, m, enabled]);
 
+  const btnSize = compact ? 36 : 48;
+  const fontSize = compact ? 22 : 32;
+  const padding = compact ? "10px 12px" : "14px 16px";
+
   return (
-    <div style={{marginBottom:16}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-        <span style={{fontSize:14,color:"#64748b",fontWeight:600,...F}}>{label}</span>
-        <button onClick={()=>setEnabled(e=>!e)}
-          style={{width:52,height:28,borderRadius:14,background:enabled?"#3b82f6":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
-          <div style={{width:22,height:22,borderRadius:"50%",background:"white",position:"absolute",top:3,left:enabled?27:3,transition:"left 0.2s"}}/>
-        </button>
-      </div>
-      {enabled && (
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,background:"#f8fafc",borderRadius:12,padding:"14px 16px",border:"1.5px solid #e2e8f0"}}>
-          {/* Hour */}
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-            <button onClick={()=>setH(v=>Math.min(22,v+1))} style={tBtn}>▲</button>
-            <span style={{fontSize:32,fontWeight:700,minWidth:56,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(h).padStart(2,"0")}</span>
-            <button onClick={()=>setH(v=>Math.max(8,v-1))} style={tBtn}>▼</button>
+    <div style={{marginBottom:compact?8:16}}>
+      {!compact&&label&&(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:14,color:"#64748b",fontWeight:600,...F}}>{label}</span>
+          <button onClick={()=>setEnabled(e=>!e)}
+            style={{width:52,height:28,borderRadius:14,background:enabled?"#3b82f6":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:"white",position:"absolute",top:3,left:enabled?27:3,transition:"left 0.2s"}}/>
+          </button>
+        </div>
+      )}
+      {(enabled||compact) && (
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:compact?8:12,background:"#f8fafc",borderRadius:12,padding,border:"1.5px solid #e2e8f0"}}>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:compact?4:8}}>
+            <button onClick={()=>setH(v=>Math.min(22,v+1))} style={{...tBtn,width:btnSize,height:btnSize,fontSize:compact?14:18}}>▲</button>
+            <span style={{fontSize,fontWeight:700,minWidth:compact?36:56,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(h).padStart(2,"0")}</span>
+            <button onClick={()=>setH(v=>Math.max(8,v-1))} style={{...tBtn,width:btnSize,height:btnSize,fontSize:compact?14:18}}>▼</button>
           </div>
-          <span style={{fontSize:28,fontWeight:700,color:"#94a3b8"}}>:</span>
-          {/* Minute */}
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-            <button onClick={()=>setM(v=>v>=55?0:v+5)} style={tBtn}>▲</button>
-            <span style={{fontSize:32,fontWeight:700,minWidth:56,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(m).padStart(2,"0")}</span>
-            <button onClick={()=>setM(v=>v<=0?55:v-5)} style={tBtn}>▼</button>
+          <span style={{fontSize:compact?20:28,fontWeight:700,color:"#94a3b8"}}>:</span>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:compact?4:8}}>
+            <button onClick={()=>setM(v=>v>=55?0:v+5)} style={{...tBtn,width:btnSize,height:btnSize,fontSize:compact?14:18}}>▲</button>
+            <span style={{fontSize,fontWeight:700,minWidth:compact?36:56,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(m).padStart(2,"0")}</span>
+            <button onClick={()=>setM(v=>v<=0?55:v-5)} style={{...tBtn,width:btnSize,height:btnSize,fontSize:compact?14:18}}>▼</button>
           </div>
-          <div style={{marginLeft:8,fontSize:16,fontWeight:700,color:"#3b82f6",fontFamily:"'DM Mono',monospace",minWidth:50}}>
+          <div style={{marginLeft:4,fontSize:compact?14:16,fontWeight:700,color:"#3b82f6",fontFamily:"'DM Mono',monospace",minWidth:compact?40:50}}>
             {String(h).padStart(2,"0")}:{String(m).padStart(2,"0")}
           </div>
         </div>
