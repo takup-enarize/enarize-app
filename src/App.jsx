@@ -54,17 +54,7 @@ function defaultCount(freq) {
   return 1;
 }
 
-// 時間ドロップダウン用: 8:00〜22:55 5分刻み
-function genTimeOptions() {
-  const opts = [""];
-  for (let h = 8; h <= 22; h++) {
-    for (let m = 0; m < 60; m += 5) {
-      opts.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
-    }
-  }
-  return opts;
-}
-const TIME_OPTIONS = genTimeOptions();
+
 
 // 時給 × 実分数で報酬計算
 function calcFeeFromTime(startTime, endTime, hourlyRate) {
@@ -253,11 +243,16 @@ export default function App() {
     return Number(lForm.fee) || 0;
   }, [lForm]);
 
+  const sortLessons = (arr) => [...arr].sort((a,b) => {
+    if (a.day !== b.day) return a.day - b.day;
+    const at = a.startTime || "00:00", bt = b.startTime || "00:00";
+    return at.localeCompare(bt);
+  });
   const saveLesson = () => {
     if (!lForm.place) return;
     const fee = lForm.feeMode === "calc" ? calcFeeFromTime(lForm.startTime, lForm.endTime, Number(lForm.hourlyRate)) : Number(lForm.fee)||0;
     const l = { ...lForm, id: editLesson ?? Date.now(), fee, unitPrice:Number(lForm.unitPrice)||0, hourlyRate:Number(lForm.hourlyRate)||0, defaultPeople:Number(lForm.defaultPeople)||10, day:Number(lForm.day) };
-    setLessons(p => editLesson ? p.map(x => x.id===editLesson?l:x) : [...p,l]);
+    setLessons(p => sortLessons(editLesson ? p.map(x => x.id===editLesson?l:x) : [...p,l]));
     if (!editLesson) setLogs(p => ({...p, [l.id]:{ count:defaultCount(l.freq), active:true, skipDates:[], people:l.defaultPeople, hours:1 }}));
     setEditLesson(null); setShowAddLesson(false); setLForm(blankLesson); flash();
   };
@@ -357,7 +352,7 @@ export default function App() {
                   return (
                     <button key={d} onClick={()=>setSelDay(isSel?null:d)}
                       style={{aspectRatio:"1",borderRadius:10,border:"none",background:isSel?"#3b82f6":isToday?"#eff6ff":isHol?"#fce7f3":has5(d)?"#fef9c3":"#f8fafc",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,padding:2,boxShadow:isSel?"0 2px 8px #3b82f660":"none"}}>
-                      <span style={{fontSize:13,fontWeight:isToday?700:400,color:isSel?"white":dow===0?"#ef4444":isHol?"#db2777":dow===6?"#3b82f6":"#1e293b"}}>{d}</span>
+                      <span style={{fontSize:15,fontWeight:isToday?700:500,color:isSel?"white":dow===0?"#ef4444":isHol?"#db2777":dow===6?"#3b82f6":"#1e293b"}}>{d}</span>
                       <div style={{display:"flex",gap:2}}>
                         {lessonsByDate[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#8b5cf6"}}/>}
                         {paydayMap[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#f59e0b"}}/>}
@@ -571,7 +566,7 @@ export default function App() {
         {tab==="lessons"&&(
           <div>
             <button onClick={()=>{setEditLesson(null);setLForm(blankLesson);setShowAddLesson(true);}}
-              style={{width:"100%",padding:14,borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:14,...F}}>
+              style={{width:"100%",padding:16,borderRadius:14,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:16,cursor:"pointer",marginBottom:16,...F}}>
               ＋ レッスンを追加する
             </button>
             {Object.entries(CATEGORIES).filter(([k])=>k!=="sub").map(([key,cat])=>{
@@ -583,7 +578,7 @@ export default function App() {
                   {ls.map(l=>(
                     <div key={l.id} style={{background:"white",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px #00000010",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
-                        <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{l.lessonName&&<span style={{marginRight:6,color:"#1e293b"}}>{l.lessonName}</span>}<span style={{color:"#64748b"}}>{l.place}</span></div>
+                        <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>{l.lessonName&&<span style={{marginRight:6,color:"#1e293b"}}>{l.lessonName}</span>}<span style={{color:"#64748b"}}>{l.place}</span></div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>
                           {SCHED_DAYS[l.day]}曜{l.startTime&&l.endTime?` ${l.startTime}〜${l.endTime}`:""} · <span style={{color:"#f59e0b"}}>{l.freq}</span>
                           {l.holiday5&&<span style={{marginLeft:4,color:"#f59e0b",fontSize:10}}>🏢5の日休</span>}
@@ -672,10 +667,8 @@ export default function App() {
             ))}
           </div>
 
-          <Label>開始時間</Label>
-          <TimeSelect value={lForm.startTime} onChange={v=>setLForm(f=>({...f,startTime:v}))} placeholder="開始"/>
-          <Label>終了時間</Label>
-          <TimeSelect value={lForm.endTime} onChange={v=>setLForm(f=>({...f,endTime:v}))} placeholder="終了"/>
+          <TimePicker label="開始時間" value={lForm.startTime} onChange={v=>setLForm(f=>({...f,startTime:v}))}/>
+          <TimePicker label="終了時間" value={lForm.endTime} onChange={v=>setLForm(f=>({...f,endTime:v}))}/>
 
           {/* fee mode */}
           {(lForm.category==="regular"||lForm.category==="event")&&(
@@ -813,17 +806,54 @@ function Modal({onClose,title,color,children}){
     </div>
   );
 }
-function Label({children}){ return <div style={{fontSize:12,color:"#64748b",marginBottom:6,...F}}>{children}</div>; }
+function Label({children}){ return <div style={{fontSize:15,color:"#64748b",marginBottom:8,fontWeight:600,...F}}>{children}</div>; }
 function LInput({value,onChange,placeholder,type="text"}){
   return <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-    style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:14,marginBottom:14,boxSizing:"border-box",...F,outline:"none"}}/>;
+    style={{width:"100%",padding:"13px 14px",borderRadius:10,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:16,marginBottom:16,boxSizing:"border-box",...F,outline:"none"}}/>;
 }
-function TimeSelect({value,onChange,placeholder}){
+function TimePicker({value, onChange, label}) {
+  const [h, setH] = useState(() => value ? parseInt(value.split(":")[0]) : 10);
+  const [m, setM] = useState(() => value ? parseInt(value.split(":")[1]) : 0);
+  const [enabled, setEnabled] = useState(!!value);
+
+  useEffect(() => {
+    if (enabled) {
+      onChange(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+    } else {
+      onChange("");
+    }
+  }, [h, m, enabled]);
+
   return (
-    <select value={value} onChange={e=>onChange(e.target.value)}
-      style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:value?"#1e293b":"#94a3b8",fontSize:14,marginBottom:14,boxSizing:"border-box",...F}}>
-      <option value="">{placeholder}</option>
-      {TIME_OPTIONS.filter(t=>t).map(t=><option key={t} value={t}>{t}</option>)}
-    </select>
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <span style={{fontSize:14,color:"#64748b",fontWeight:600,...F}}>{label}</span>
+        <button onClick={()=>setEnabled(e=>!e)}
+          style={{width:52,height:28,borderRadius:14,background:enabled?"#3b82f6":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+          <div style={{width:22,height:22,borderRadius:"50%",background:"white",position:"absolute",top:3,left:enabled?27:3,transition:"left 0.2s"}}/>
+        </button>
+      </div>
+      {enabled && (
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,background:"#f8fafc",borderRadius:12,padding:"14px 16px",border:"1.5px solid #e2e8f0"}}>
+          {/* Hour */}
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+            <button onClick={()=>setH(v=>Math.min(22,v+1))} style={tBtn}>▲</button>
+            <span style={{fontSize:28,fontWeight:700,minWidth:48,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(h).padStart(2,"0")}</span>
+            <button onClick={()=>setH(v=>Math.max(8,v-1))} style={tBtn}>▼</button>
+          </div>
+          <span style={{fontSize:28,fontWeight:700,color:"#94a3b8"}}>:</span>
+          {/* Minute */}
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+            <button onClick={()=>setM(v=>v>=55?0:v+5)} style={tBtn}>▲</button>
+            <span style={{fontSize:28,fontWeight:700,minWidth:48,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(m).padStart(2,"0")}</span>
+            <button onClick={()=>setM(v=>v<=0?55:v-5)} style={tBtn}>▼</button>
+          </div>
+          <div style={{marginLeft:8,fontSize:16,fontWeight:700,color:"#3b82f6",fontFamily:"'DM Mono',monospace",minWidth:50}}>
+            {String(h).padStart(2,"0")}:{String(m).padStart(2,"0")}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
+const tBtn = {width:40,height:40,borderRadius:10,border:"1.5px solid #e2e8f0",background:"white",color:"#3b82f6",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700};
