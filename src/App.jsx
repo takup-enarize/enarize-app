@@ -130,7 +130,12 @@ export default function App() {
     const cnt = Math.max(0, lg.count - skips);
     const fee = getLessonFee(l);
     if (l.category === "circle") return cnt * (lg.peopleSessions ? lg.peopleSessions.reduce((a,p)=>a+p,0)/lg.peopleSessions.length : (l.defaultPeople??10)) * (l.unitPrice??0);
-    if (l.category === "part")   return cnt * (lg.hours ?? 1) * (l.hourlyRate ?? 0);
+    if (l.category === "part") {
+      // 時給×実時間で計算（開始〜終了時間から自動）
+      const partFee = calcFeeFromTime(l.startTime, l.endTime, l.hourlyRate ?? 0);
+      const transport = Number(l.transport) || 0;
+      return cnt * (partFee + transport);
+    }
     return cnt * fee;
   }, [getLog, getLessonFee]);
 
@@ -497,7 +502,7 @@ export default function App() {
                   </div>
                   {Array.from({length:lg.count??1}).map((_,si)=>(
                     <div key={si} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
-                      <div style={{fontSize:12,color:"#94a3b8",minWidth:50}}>{si+1}回目</div>
+                      <div style={{fontSize:14,color:"#94a3b8",minWidth:60}}>{l.category==="part"?`出勤${si+1}回`:`${si+1}回目`}</div>
                       {l.category==="circle"?<>
                         <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.peopleSessions??Array(cur.count??1).fill(l.defaultPeople))];s[si]=Math.max(1,(s[si]??l.defaultPeople)-1);return{...p,[l.id]:{...cur,peopleSessions:s}};});flash();}} style={cBtn}>－</button>
                         <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(getLog(l.id).peopleSessions?.[si]??l.defaultPeople)}</span>
@@ -505,11 +510,15 @@ export default function App() {
                         <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
                         <span style={{fontSize:12,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((getLog(l.id).peopleSessions?.[si]??l.defaultPeople)*l.unitPrice).toLocaleString()}</span>
                       </>:<>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.hoursSessions??Array(cur.count??1).fill(1))];s[si]=Math.max(0.5,(s[si]??1)-0.5);return{...p,[l.id]:{...cur,hoursSessions:s}};});flash();}} style={cBtn}>－</button>
-                        <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(getLog(l.id).hoursSessions?.[si]??1)}</span>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.hoursSessions??Array(cur.count??1).fill(1))];s[si]=(s[si]??1)+0.5;return{...p,[l.id]:{...cur,hoursSessions:s}};});flash();}} style={cBtn}>＋</button>
-                        <span style={{fontSize:12,color:"#94a3b8"}}>時間</span>
-                        <span style={{fontSize:12,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((getLog(l.id).hoursSessions?.[si]??1)*l.hourlyRate).toLocaleString()}</span>
+                        <div style={{flex:1,background:"#f0fdf4",borderRadius:8,padding:"8px 12px"}}>
+                          <div style={{fontSize:15,color:"#64748b",marginBottom:4}}>
+                            {l.startTime}〜{l.endTime}（{Math.round(calcFeeFromTime(l.startTime,l.endTime,1)/60*10)/10}時間）
+                          </div>
+                          <div style={{fontSize:16,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
+                            ¥{calcFeeFromTime(l.startTime,l.endTime,l.hourlyRate??0).toLocaleString()}
+                            {Number(l.transport)>0&&<span style={{fontSize:13,color:"#10b981",marginLeft:6}}>+交通費¥{Number(l.transport).toLocaleString()}</span>}
+                          </div>
+                        </div>
                       </>}
                     </div>
                   ))}
