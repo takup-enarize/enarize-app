@@ -72,8 +72,8 @@ function load(key, fallback) {
 function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
 
 const F = { fontFamily:"'Noto Sans JP',sans-serif" };
-const cBtn = { width:36, height:36, borderRadius:8, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" };
-const delBtn = { background:"#fee2e2", border:"none", borderRadius:6, padding:"4px 10px", color:"#ef4444", fontSize:12, cursor:"pointer", fontFamily:"'Noto Sans JP',sans-serif" };
+const cBtn = { width:52, height:52, borderRadius:12, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:26, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" };
+const delBtn = { background:"#fee2e2", border:"none", borderRadius:8, padding:"10px 16px", color:"#ef4444", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"'Noto Sans JP',sans-serif" };
 
 export default function App() {
   const today = new Date();
@@ -292,7 +292,7 @@ export default function App() {
         <div style={{display:"flex",overflowX:"auto"}}>
           {[["calendar","📅"],["input","📝"],["expenses","💸"],["lessons","⚙️"],["analysis","📊"]].map(([key,icon])=>(
             <button key={key} onClick={()=>setTab(key)}
-              style={{flexShrink:0,flex:1,padding:"9px 8px",background:"none",border:"none",borderBottom:tab===key?"2px solid white":"2px solid transparent",color:tab===key?"white":"#ffffff80",fontWeight:700,fontSize:18,cursor:"pointer"}}>
+              style={{flexShrink:0,flex:1,padding:"9px 8px",background:"none",border:"none",borderBottom:tab===key?"2px solid white":"2px solid transparent",color:tab===key?"white":"#ffffff80",fontWeight:700,fontSize:22,cursor:"pointer"}}>
               {icon}
             </button>
           ))}
@@ -305,18 +305,18 @@ export default function App() {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
             <div>
               <div style={{fontSize:10,color:"#94a3b8",letterSpacing:1,marginBottom:4}}>今月の収入見込み</div>
-              <div style={{fontSize:26,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>¥{totalIncome.toLocaleString()}</div>
+              <div style={{fontSize:36,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>¥{totalIncome.toLocaleString()}</div>
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontSize:10,color:"#94a3b8",marginBottom:4}}>手残り</div>
-              <div style={{fontSize:20,fontWeight:700,fontFamily:"'DM Mono',monospace",color:netIncome>=0?"#10b981":"#ef4444"}}>¥{netIncome.toLocaleString()}</div>
+              <div style={{fontSize:28,fontWeight:700,fontFamily:"'DM Mono',monospace",color:netIncome>=0?"#10b981":"#ef4444"}}>¥{netIncome.toLocaleString()}</div>
             </div>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {Object.entries(CATEGORIES).map(([key,cat])=>{
               const inc = key==="sub" ? subsIncome : lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0);
               if(!inc) return null;
-              return <div key={key} style={{background:cat.color+"12",borderRadius:8,padding:"5px 10px",border:`1px solid ${cat.color}25`}}><span style={{fontSize:10,color:cat.color,fontWeight:700}}>{cat.icon} {cat.label}</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:cat.color,marginLeft:6}}>¥{inc.toLocaleString()}</span></div>;
+              return <div key={key} style={{background:cat.color+"12",borderRadius:8,padding:"5px 10px",border:`1px solid ${cat.color}25`}}><span style={{fontSize:13,color:cat.color,fontWeight:700}}>{cat.icon} {cat.label}</span><span style={{fontSize:13,fontFamily:"'DM Mono',monospace",color:cat.color,marginLeft:6}}>¥{inc.toLocaleString()}</span></div>;
             })}
             {subIncome>0&&<div style={{background:"#10b98112",borderRadius:8,padding:"5px 10px",border:"1px solid #10b98125"}}><span style={{fontSize:10,color:"#10b981",fontWeight:700}}>📱 サブスク</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#10b981",marginLeft:6}}>¥{subIncome.toLocaleString()}</span></div>}
           </div>
@@ -325,11 +325,11 @@ export default function App() {
         {/* weekly bar */}
         {weeklyIncome.length>0&&(
           <div style={{background:"white",borderRadius:16,padding:"14px 16px",marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:10}}>週別収入</div>
+            <div style={{fontSize:16,fontWeight:700,color:"#64748b",marginBottom:12}}>週別収入</div>
             <div style={{display:"flex",gap:6}}>
               {weeklyIncome.map((w,i)=>{
                 const max=Math.max(...weeklyIncome,1);
-                return <div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:44,display:"flex",alignItems:"flex-end",justifyContent:"center",marginBottom:4}}><div style={{width:"75%",background:"linear-gradient(180deg,#3b82f6,#8b5cf6)",borderRadius:"4px 4px 0 0",height:`${Math.max(4,w/max*100)}%`}}/></div><div style={{fontSize:9,color:"#94a3b8"}}>{i+1}週</div><div style={{fontSize:10,fontWeight:700,color:"#3b82f6",fontFamily:"'DM Mono',monospace"}}>¥{Math.round(w/1000)}k</div></div>;
+                return <div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:44,display:"flex",alignItems:"flex-end",justifyContent:"center",marginBottom:4}}><div style={{width:"75%",background:"linear-gradient(180deg,#3b82f6,#8b5cf6)",borderRadius:"4px 4px 0 0",height:`${Math.max(4,w/max*100)}%`}}/></div><div style={{fontSize:12,color:"#94a3b8"}}>{i+1}週</div><div style={{fontSize:13,fontWeight:700,color:"#3b82f6",fontFamily:"'DM Mono',monospace"}}>¥{Math.round(w/1000)}k</div></div>;
               })}
             </div>
           </div>
@@ -340,7 +340,7 @@ export default function App() {
           <div>
             <div style={{background:"white",borderRadius:16,padding:14,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:6}}>
-                {WEEK_DAYS.map((d,i)=><div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:i===0?"#ef4444":i===6?"#3b82f6":"#94a3b8",padding:"4px 0"}}>{d}</div>)}
+                {WEEK_DAYS.map((d,i)=><div key={d} style={{textAlign:"center",fontSize:14,fontWeight:700,color:i===0?"#ef4444":i===6?"#3b82f6":"#94a3b8",padding:"6px 0"}}>{d}</div>)}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
                 {calDays.map((d,i)=>{
@@ -352,7 +352,7 @@ export default function App() {
                   return (
                     <button key={d} onClick={()=>setSelDay(isSel?null:d)}
                       style={{aspectRatio:"1",borderRadius:10,border:"none",background:isSel?"#3b82f6":isToday?"#eff6ff":isHol?"#fce7f3":has5(d)?"#fef9c3":"#f8fafc",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,padding:2,boxShadow:isSel?"0 2px 8px #3b82f660":"none"}}>
-                      <span style={{fontSize:15,fontWeight:isToday?700:500,color:isSel?"white":dow===0?"#ef4444":isHol?"#db2777":dow===6?"#3b82f6":"#1e293b"}}>{d}</span>
+                      <span style={{fontSize:17,fontWeight:isToday?700:500,color:isSel?"white":dow===0?"#ef4444":isHol?"#db2777":dow===6?"#3b82f6":"#1e293b"}}>{d}</span>
                       <div style={{display:"flex",gap:2}}>
                         {lessonsByDate[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#8b5cf6"}}/>}
                         {paydayMap[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#f59e0b"}}/>}
@@ -375,7 +375,7 @@ export default function App() {
             {selDay&&(
               <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                  <div style={{fontSize:15,fontWeight:700,color:"#3b82f6"}}>
+                  <div style={{fontSize:18,fontWeight:700,color:"#3b82f6"}}>
                     {calMonth}月{selDay}日
                     {isHoliday(calYear,calMonth,selDay)&&<span style={{fontSize:10,color:"#db2777",background:"#fce7f3",padding:"2px 6px",borderRadius:8,marginLeft:6}}>祝日</span>}
                     {has5(selDay)&&<span style={{fontSize:10,color:"#f59e0b",background:"#fef9c3",padding:"2px 6px",borderRadius:8,marginLeft:4}}>5のつく日</span>}
@@ -391,7 +391,7 @@ export default function App() {
                 {paydayMap[selDay]?.map(g=>(
                   <div key={g.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#fffbeb",borderRadius:10,marginBottom:8,border:"1px solid #fde68a"}}>
                     <div><div style={{fontSize:13,fontWeight:700}}>💴 {g.name}</div><div style={{fontSize:11,color:"#94a3b8"}}>給料日</div></div>
-                    <div style={{fontSize:15,fontWeight:700,color:"#f59e0b",fontFamily:"'DM Mono',monospace"}}>¥{g.inc.toLocaleString()}</div>
+                    <div style={{fontSize:19,fontWeight:700,color:"#f59e0b",fontFamily:"'DM Mono',monospace"}}>¥{g.inc.toLocaleString()}</div>
                   </div>
                 ))}
 
@@ -404,7 +404,7 @@ export default function App() {
                     <div key={l.id} onClick={()=>!rest&&toggleSkip(l.id,selDay)}
                       style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:skipped||rest?"#f8fafc":cat.color+"10",borderRadius:10,marginBottom:8,border:`1px solid ${skipped||rest?"#e2e8f0":cat.color+"30"}`,cursor:rest?"default":"pointer",opacity:skipped||rest?0.5:1}}>
                       <div>
-                        <div style={{fontSize:13,fontWeight:600}}>{cat.icon} {l.lessonName&&<span style={{marginRight:4}}>{l.lessonName}</span>}{l.place}</div>
+                        <div style={{fontSize:16,fontWeight:700}}>{cat.icon} {l.lessonName&&<span style={{marginRight:4}}>{l.lessonName}</span>}{l.place}</div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>{l.startTime&&l.endTime?`${l.startTime}〜${l.endTime}`:""} {l.freq}</div>
                       </div>
                       <div style={{textAlign:"right"}}>
@@ -469,9 +469,9 @@ export default function App() {
                         </div>
                         <div style={{flex:1}}>
                           <div style={{fontSize:12,fontWeight:700}}>{g.name}</div>
-                          <div style={{fontSize:10,color:"#94a3b8"}}>{calMonth}月{day}日{isPast?"（支払済）":"（予定）"}</div>
+                          <div style={{fontSize:13,color:"#94a3b8"}}>{calMonth}月{day}日{isPast?"（支払済）":"（予定）"}</div>
                         </div>
-                        <div style={{fontSize:15,fontWeight:700,color:"#f59e0b",fontFamily:"'DM Mono',monospace"}}>¥{g.inc.toLocaleString()}</div>
+                        <div style={{fontSize:19,fontWeight:700,color:"#f59e0b",fontFamily:"'DM Mono',monospace"}}>¥{g.inc.toLocaleString()}</div>
                       </div>
                     );
                   })
@@ -566,7 +566,7 @@ export default function App() {
         {tab==="lessons"&&(
           <div>
             <button onClick={()=>{setEditLesson(null);setLForm(blankLesson);setShowAddLesson(true);}}
-              style={{width:"100%",padding:16,borderRadius:14,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:16,cursor:"pointer",marginBottom:16,...F}}>
+              style={{width:"100%",padding:18,borderRadius:14,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:18,cursor:"pointer",marginBottom:16,...F}}>
               ＋ レッスンを追加する
             </button>
             {Object.entries(CATEGORIES).filter(([k])=>k!=="sub").map(([key,cat])=>{
@@ -578,7 +578,7 @@ export default function App() {
                   {ls.map(l=>(
                     <div key={l.id} style={{background:"white",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px #00000010",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
-                        <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>{l.lessonName&&<span style={{marginRight:6,color:"#1e293b"}}>{l.lessonName}</span>}<span style={{color:"#64748b"}}>{l.place}</span></div>
+                        <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>{l.lessonName&&<span style={{marginRight:6,color:"#1e293b"}}>{l.lessonName}</span>}<span style={{color:"#64748b"}}>{l.place}</span></div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>
                           {SCHED_DAYS[l.day]}曜{l.startTime&&l.endTime?` ${l.startTime}〜${l.endTime}`:""} · <span style={{color:"#f59e0b"}}>{l.freq}</span>
                           {l.holiday5&&<span style={{marginLeft:4,color:"#f59e0b",fontSize:10}}>🏢5の日休</span>}
@@ -622,14 +622,14 @@ export default function App() {
         {tab==="analysis"&&(
           <div>
             <div style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
-              <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:14}}>📊 収入内訳</div>
+              <div style={{fontSize:16,fontWeight:700,color:"#64748b",marginBottom:16}}>📊 収入内訳</div>
               {[...Object.entries(CATEGORIES).map(([key,cat])=>[cat.label,key==="sub"?subsIncome:lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),["サブスク",subIncome,"#10b981"],["スポット",spotIncome,"#64748b"]].filter(([,v])=>v>0).map(([l,v,c])=>{
                 const pct=totalIncome>0?v/totalIncome*100:0;
                 return <div key={l} style={{marginBottom:12}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12}}>{l}</span><span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:c}}>¥{v.toLocaleString()} <span style={{color:"#94a3b8",fontSize:10}}>({pct.toFixed(0)}%)</span></span></div><div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:`${pct}%`,background:c,borderRadius:4}}/></div></div>;
               })}
             </div>
             <div style={{background:"white",borderRadius:16,padding:16,boxShadow:"0 2px 12px #00000012"}}>
-              <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12}}>💰 収支サマリー</div>
+              <div style={{fontSize:16,fontWeight:700,color:"#64748b",marginBottom:14}}>💰 収支サマリー</div>
               {[["総収入",totalIncome,"#10b981"],["総支出",totalExpenses,"#ef4444"],["手残り",netIncome,netIncome>=0?"#3b82f6":"#ef4444"]].map(([l,v,c])=>(
                 <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
                   <span style={{fontSize:13,fontWeight:600}}>{l}</span>
@@ -649,7 +649,7 @@ export default function App() {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
             {Object.entries(CATEGORIES).filter(([k])=>k!=="sub").map(([key,cat])=>(
               <button key={key} onClick={()=>setLForm(f=>({...f,category:key}))}
-                style={{padding:"10px 8px",borderRadius:10,border:lForm.category===key?`2px solid ${cat.color}`:"2px solid #e2e8f0",background:lForm.category===key?cat.color+"15":"white",color:lForm.category===key?cat.color:"#64748b",fontSize:12,cursor:"pointer",textAlign:"left",...F}}>
+                style={{padding:"10px 8px",borderRadius:10,border:lForm.category===key?`2px solid ${cat.color}`:"2px solid #e2e8f0",background:lForm.category===key?cat.color+"15":"white",color:lForm.category===key?cat.color:"#64748b",fontSize:14,cursor:"pointer",textAlign:"left",...F}}>
                 <div style={{fontWeight:700}}>{cat.icon} {cat.label}</div>
                 <div style={{fontSize:10,marginTop:2,color:"#94a3b8"}}>{cat.desc}</div>
               </button>
@@ -663,7 +663,7 @@ export default function App() {
           <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
             {SCHED_DAYS.map((d,i)=>(
               <button key={i} onClick={()=>setLForm(f=>({...f,day:i}))}
-                style={{padding:"6px 12px",borderRadius:8,border:Number(lForm.day)===i?"2px solid #3b82f6":"2px solid #e2e8f0",background:Number(lForm.day)===i?"#eff6ff":"white",color:Number(lForm.day)===i?"#3b82f6":"#64748b",fontSize:12,cursor:"pointer",...F}}>{d}</button>
+                style={{padding:"6px 12px",borderRadius:8,border:Number(lForm.day)===i?"2px solid #3b82f6":"2px solid #e2e8f0",background:Number(lForm.day)===i?"#eff6ff":"white",color:Number(lForm.day)===i?"#3b82f6":"#64748b",fontSize:15,cursor:"pointer",padding:"8px 14px",...F}}>{d}</button>
             ))}
           </div>
 
@@ -702,7 +702,7 @@ export default function App() {
           <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
             {FREQS.map(fr=>(
               <button key={fr} onClick={()=>setLForm(f=>({...f,freq:fr}))}
-                style={{padding:"6px 14px",borderRadius:8,border:lForm.freq===fr?"2px solid #3b82f6":"2px solid #e2e8f0",background:lForm.freq===fr?"#eff6ff":"white",color:lForm.freq===fr?"#3b82f6":"#64748b",fontSize:12,cursor:"pointer",...F}}>{fr}</button>
+                style={{padding:"6px 14px",borderRadius:8,border:lForm.freq===fr?"2px solid #3b82f6":"2px solid #e2e8f0",background:lForm.freq===fr?"#eff6ff":"white",color:lForm.freq===fr?"#3b82f6":"#64748b",fontSize:15,cursor:"pointer",...F}}>{fr}</button>
             ))}
           </div>
 
@@ -719,7 +719,7 @@ export default function App() {
             ))}
           </div>
 
-          <button onClick={saveLesson} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>
+          <button onClick={saveLesson} style={{width:"100%",padding:16,borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",...F}}>
             {editLesson?"更新する":"追加する"}
           </button>
         </Modal>
@@ -800,16 +800,16 @@ function Modal({onClose,title,color,children}){
     <div style={{position:"fixed",inset:0,background:"#00000066",display:"flex",alignItems:"flex-end",zIndex:200}} onClick={onClose}>
       <div style={{background:"white",width:"100%",maxWidth:480,margin:"0 auto",borderRadius:"20px 20px 0 0",padding:24,paddingBottom:40,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 -4px 24px #00000020"}} onClick={e=>e.stopPropagation()}>
         <div style={{width:36,height:4,background:"#e2e8f0",borderRadius:2,margin:"0 auto 18px"}}/>
-        <div style={{fontSize:16,fontWeight:700,marginBottom:18,color}}>{title}</div>
+        <div style={{fontSize:20,fontWeight:700,marginBottom:20,color}}>{title}</div>
         {children}
       </div>
     </div>
   );
 }
-function Label({children}){ return <div style={{fontSize:15,color:"#64748b",marginBottom:8,fontWeight:600,...F}}>{children}</div>; }
+function Label({children}){ return <div style={{fontSize:18,color:"#64748b",marginBottom:10,fontWeight:700,...F}}>{children}</div>; }
 function LInput({value,onChange,placeholder,type="text"}){
   return <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-    style={{width:"100%",padding:"13px 14px",borderRadius:10,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:16,marginBottom:16,boxSizing:"border-box",...F,outline:"none"}}/>;
+    style={{width:"100%",padding:"15px 16px",borderRadius:12,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:18,marginBottom:18,boxSizing:"border-box",...F,outline:"none"}}/>;
 }
 function TimePicker({value, onChange, label}) {
   const [h, setH] = useState(() => value ? parseInt(value.split(":")[0]) : 10);
@@ -838,14 +838,14 @@ function TimePicker({value, onChange, label}) {
           {/* Hour */}
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
             <button onClick={()=>setH(v=>Math.min(22,v+1))} style={tBtn}>▲</button>
-            <span style={{fontSize:28,fontWeight:700,minWidth:48,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(h).padStart(2,"0")}</span>
+            <span style={{fontSize:32,fontWeight:700,minWidth:56,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(h).padStart(2,"0")}</span>
             <button onClick={()=>setH(v=>Math.max(8,v-1))} style={tBtn}>▼</button>
           </div>
           <span style={{fontSize:28,fontWeight:700,color:"#94a3b8"}}>:</span>
           {/* Minute */}
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
             <button onClick={()=>setM(v=>v>=55?0:v+5)} style={tBtn}>▲</button>
-            <span style={{fontSize:28,fontWeight:700,minWidth:48,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(m).padStart(2,"0")}</span>
+            <span style={{fontSize:32,fontWeight:700,minWidth:56,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#1e293b"}}>{String(m).padStart(2,"0")}</span>
             <button onClick={()=>setM(v=>v<=0?55:v-5)} style={tBtn}>▼</button>
           </div>
           <div style={{marginLeft:8,fontSize:16,fontWeight:700,color:"#3b82f6",fontFamily:"'DM Mono',monospace",minWidth:50}}>
@@ -856,4 +856,4 @@ function TimePicker({value, onChange, label}) {
     </div>
   );
 }
-const tBtn = {width:40,height:40,borderRadius:10,border:"1.5px solid #e2e8f0",background:"white",color:"#3b82f6",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700};
+const tBtn = {width:48,height:48,borderRadius:12,border:"1.5px solid #e2e8f0",background:"white",color:"#3b82f6",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700};
