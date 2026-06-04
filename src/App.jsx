@@ -62,6 +62,21 @@ function calcFeeFromTime(startTime, endTime, hourlyRate) {
   return Math.round((Number(hourlyRate) / 60) * minutes);
 }
 
+// 開始〜終了の分数を返す（時間表示用）
+function calcMins(startTime, endTime) {
+  if (!startTime || !endTime) return 0;
+  const [sh, sm] = startTime.split(":").map(Number);
+  const [eh, em] = endTime.split(":").map(Number);
+  const m = (eh * 60 + em) - (sh * 60 + sm);
+  return m > 0 ? m : 0;
+}
+function fmtMins(mins) {
+  if (!mins) return "";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? (m > 0 ? `${h}時間${m}分` : `${h}時間`) : `${m}分`;
+}
+
 function load(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
@@ -624,7 +639,7 @@ export default function App() {
                 if(!sh||!sh.enabled||!sh.startTime||!sh.endTime) continue;
                 const ds=`${mk}-${String(d).padStart(2,"0")}`;
                 const absent=(lg.absentDates??[]).includes(ds);
-                const mins=calcFeeFromTime(sh.startTime,sh.endTime,1);
+                const mins=calcMins(sh.startTime,sh.endTime);
                 const wage=calcFeeFromTime(sh.startTime,sh.endTime,rate);
                 workDays.push({d,dow,si,sh,ds,absent,mins,wage});
               }
@@ -667,12 +682,12 @@ export default function App() {
                       {["月","火","水","木","金","土","日"].map((d,i)=>{
                         const sh=dayShifts[i];
                         if(!sh||!sh.enabled) return null;
-                        const mins=calcFeeFromTime(sh.startTime,sh.endTime,1);
+                        const mins=calcMins(sh.startTime,sh.endTime);
                         return (
                           <div key={i} style={{background:"white",borderRadius:8,padding:"4px 10px",border:"1px solid #fed7aa",fontSize:12}}>
                             <span style={{fontWeight:700,color:"#f97316"}}>{d}</span>
                             <span style={{color:"#64748b",marginLeft:4}}>{sh.startTime}〜{sh.endTime}</span>
-                            <span style={{color:"#f97316",marginLeft:4,fontWeight:600}}>{Math.floor(mins/60)}h{mins%60>0?`${mins%60}m`:""}</span>
+                            <span style={{color:"#f97316",marginLeft:4,fontWeight:600}}>{fmtMins(mins)}</span>
                           </div>
                         );
                       })}
@@ -697,7 +712,7 @@ export default function App() {
                               </div>
                               <div style={{flex:1}}>
                                 <div style={{fontSize:13,color:absent?"#94a3b8":"#1e293b"}}>{sh.startTime}〜{sh.endTime}</div>
-                                <div style={{fontSize:11,color:"#94a3b8"}}>{Math.floor(mins/60)}時間{mins%60>0?`${mins%60}分`:""}</div>
+                                <div style={{fontSize:11,color:"#94a3b8"}}>{fmtMins(mins)}</div>
                               </div>
                               <div style={{textAlign:"right"}}>
                                 {absent?(
@@ -721,7 +736,7 @@ export default function App() {
                         </div>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                           <span style={{fontSize:13,color:"#64748b"}}>合計勤務時間</span>
-                          <span style={{fontSize:14,fontWeight:700,color:"#f97316"}}>{Math.floor(totalMins/60)}時間{totalMins%60>0?`${totalMins%60}分`:""}</span>
+                          <span style={{fontSize:14,fontWeight:700,color:"#f97316"}}>{fmtMins(totalMins)}</span>
                         </div>
                         {l.transportPer==="month"&&transport>0&&(
                           <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
@@ -1022,7 +1037,7 @@ export default function App() {
                             {Array.from({length:(22-6)*4+1},(_,j)=>{const hh=6+Math.floor(j/4),mm=(j%4)*15;return `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
                           </select>
                           <span style={{fontSize:12,color:"#f97316",fontWeight:700,minWidth:36,textAlign:"right"}}>
-                            {calcFeeFromTime(sh.startTime,sh.endTime,1)>0?`${Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}h${calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}m`:""}` :""}
+                            {fmtMins(calcMins(sh.startTime,sh.endTime))}
                           </span>
                         </>
                       )}
@@ -1169,7 +1184,7 @@ export default function App() {
                         {Array.from({length:(22-6)*4+1},(_,j)=>{const hh=6+Math.floor(j/4),mm=(j%4)*15;return `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
                       </select>
                       <span style={{fontSize:12,color:"#f97316",fontWeight:700,minWidth:36,textAlign:"right"}}>
-                        {calcFeeFromTime(sh.startTime,sh.endTime,1)>0?`${Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}h${calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}m`:""}` :""}
+                        {fmtMins(calcMins(sh.startTime,sh.endTime))}
                       </span>
                     </>
                   )}
