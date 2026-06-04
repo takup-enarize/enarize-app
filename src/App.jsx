@@ -250,18 +250,7 @@ export default function App() {
     const map = {}; expenses.forEach(e => { const d=parseInt(e.date.split("-")[2]); if(!map[d])map[d]=[]; map[d].push(e); }); return map;
   }, [expenses]);
 
-  const weeklyIncome = useMemo(() => {
-    const weeks = [0,0,0,0,0];
-    const last = new Date(calYear, calMonth, 0).getDate();
-    for (let d = 1; d <= last; d++) {
-      const wi  = Math.min(Math.floor((d-1)/7), 4);
-      const dow = new Date(calYear, calMonth-1, d).getDay();
-      const si  = dow === 0 ? 6 : dow - 1;
-      lessons.filter(l => l.day===si && getLog(l.id).active && !isRestDay(l,d) && !isSkipped(l.id,d))
-        .forEach(l => { weeks[wi] += getLessonFee(l); });
-    }
-    return weeks.filter((_,i) => i*7+1 <= last);
-  }, [calYear, calMonth, lessons, logs]);
+
 
   // forms
   const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"", shiftType:"fixed", transportPer:"shift" };
@@ -344,6 +333,21 @@ export default function App() {
     });
   }, [merch, merchLogs]);
 
+  // 明日のレッスン（当月表示中かつ翌日が同月内の場合のみ）
+  const tomorrowLessons = useMemo(() => {
+    const tmr = new Date(today); tmr.setDate(today.getDate() + 1);
+    const tmrYear = tmr.getFullYear(), tmrMonth = tmr.getMonth()+1, tmrDay = tmr.getDate();
+    if (tmrYear !== calYear || tmrMonth !== calMonth) return [];
+    const dow = tmr.getDay();
+    const si  = dow === 0 ? 6 : dow - 1;
+    return lessons.filter(l =>
+      l.day === si &&
+      getLog(l.id).active &&
+      !isRestDay(l, tmrDay) &&
+      !isSkipped(l.id, tmrDay)
+    );
+  }, [calYear, calMonth, lessons, logs]);
+
   const prevMonth = () => { if(calMonth===1){setCalYear(y=>y-1);setCalMonth(12);}else setCalMonth(m=>m-1); setSelDay(null); };
   const nextMonth = () => { if(calMonth===12){setCalYear(y=>y+1);setCalMonth(1);}else setCalMonth(m=>m+1); setSelDay(null); };
 
@@ -353,17 +357,11 @@ export default function App() {
 
       {/* header */}
       <div style={{background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",padding:"16px 18px 0",position:"sticky",top:0,zIndex:50,boxShadow:"0 2px 12px #3b82f640"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <div>
-            <div style={{fontSize:10,color:"#ffffff99",letterSpacing:3,fontWeight:700}}>ENARIZE</div>
-            <div style={{fontSize:20,fontWeight:700,fontFamily:"'DM Mono',monospace",color:"white"}}>Lesson Income</div>
-          </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <button onClick={prevMonth} style={{background:"none",border:"none",color:"white",fontSize:32,cursor:"pointer",padding:"0 4px",lineHeight:1}}>‹</button>
+          <span style={{fontSize:22,fontWeight:700,color:"white",letterSpacing:1}}>{calYear}年 {MONTHS_JP[calMonth-1]}</span>
+          <button onClick={nextMonth} style={{background:"none",border:"none",color:"white",fontSize:32,cursor:"pointer",padding:"0 4px",lineHeight:1}}>›</button>
           {badge&&<div style={{fontSize:10,color:"white",background:"#ffffff30",padding:"3px 10px",borderRadius:20}}>✓ 保存済み</div>}
-        </div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:20,marginBottom:10}}>
-          <button onClick={prevMonth} style={{background:"none",border:"none",color:"white",fontSize:22,cursor:"pointer"}}>‹</button>
-          <span style={{fontSize:15,fontWeight:700,color:"white"}}>{calYear}年 {MONTHS_JP[calMonth-1]}</span>
-          <button onClick={nextMonth} style={{background:"none",border:"none",color:"white",fontSize:22,cursor:"pointer"}}>›</button>
         </div>
         <div style={{display:"flex",overflowX:"auto"}}>
           {[["calendar","📅"],["input","📝"],["expenses","💸"],["lessons","⚙️"],["merch","🛍️"],["analysis","📊"]].map(([key,icon])=>(
@@ -399,19 +397,47 @@ export default function App() {
           </div>
         </div>
 
-        {/* weekly bar */}
-        {weeklyIncome.length>0&&(
-          <div style={{background:"white",borderRadius:16,padding:"14px 16px",marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
-            <div style={{fontSize:16,fontWeight:700,color:"#64748b",marginBottom:12}}>週別収入</div>
-            <div style={{display:"flex",gap:6}}>
-              {weeklyIncome.map((w,i)=>{
-                const max=Math.max(...weeklyIncome,1);
-                return <div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:44,display:"flex",alignItems:"flex-end",justifyContent:"center",marginBottom:4}}><div style={{width:"75%",background:"linear-gradient(180deg,#3b82f6,#8b5cf6)",borderRadius:"4px 4px 0 0",height:`${Math.max(4,w/max*100)}%`}}/></div><div style={{fontSize:12,color:"#94a3b8"}}>{i+1}週</div><div style={{fontSize:13,fontWeight:700,color:"#3b82f6",fontFamily:"'DM Mono',monospace"}}>¥{Math.round(w/1000)}k</div></div>;
-              })}
+
+
+        {/* 明日のレッスン ticker */}
+        {tomorrowLessons.length>0&&(
+          <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",borderRadius:12,padding:"10px 14px",marginBottom:14,overflow:"hidden",position:"relative",display:"flex",alignItems:"center",gap:10,boxShadow:"0 2px 10px #00000020"}}>
+            <style>{`@keyframes ticker{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
+            <div style={{flexShrink:0,fontSize:11,fontWeight:700,color:"#f59e0b",background:"#f59e0b20",border:"1px solid #f59e0b50",borderRadius:6,padding:"2px 8px",letterSpacing:1}}>明日</div>
+            <div style={{overflow:"hidden",flex:1}}>
+              <div style={{display:"inline-block",whiteSpace:"nowrap",animation:"ticker 18s linear infinite",fontSize:13,color:"white",fontWeight:500}}>
+                {tomorrowLessons.map((l,i)=>{
+                  const cat=CATEGORIES[l.category];
+                  const fee=getLessonFee(l);
+                  return (
+                    <span key={l.id}>
+                      {i>0&&<span style={{color:"#475569",margin:"0 16px"}}>｜</span>}
+                      <span style={{color:cat.color}}>{cat.icon}</span>
+                      <span style={{marginLeft:5}}>{l.lessonName||l.place}</span>
+                      {l.startTime&&<span style={{color:"#94a3b8",marginLeft:6,fontFamily:"'DM Mono',monospace"}}>{l.startTime}〜{l.endTime}</span>}
+                      <span style={{color:"#f59e0b",marginLeft:8,fontFamily:"'DM Mono',monospace",fontWeight:700}}>¥{fee.toLocaleString()}</span>
+                    </span>
+                  );
+                })}
+                {/* 2周目（途切れないよう） */}
+                <span style={{marginLeft:40}}/>
+                {tomorrowLessons.map((l,i)=>{
+                  const cat=CATEGORIES[l.category];
+                  const fee=getLessonFee(l);
+                  return (
+                    <span key={`r${l.id}`}>
+                      {i>0&&<span style={{color:"#475569",margin:"0 16px"}}>｜</span>}
+                      <span style={{color:cat.color}}>{cat.icon}</span>
+                      <span style={{marginLeft:5}}>{l.lessonName||l.place}</span>
+                      {l.startTime&&<span style={{color:"#94a3b8",marginLeft:6,fontFamily:"'DM Mono',monospace"}}>{l.startTime}〜{l.endTime}</span>}
+                      <span style={{color:"#f59e0b",marginLeft:8,fontFamily:"'DM Mono',monospace",fontWeight:700}}>¥{fee.toLocaleString()}</span>
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
-
         {/* ══ CALENDAR ══ */}
         {tab==="calendar"&&(
           <div>
