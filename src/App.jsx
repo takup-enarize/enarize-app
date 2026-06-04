@@ -16,19 +16,18 @@ const EXPENSE_CATS = ["交通費","駐車場","スタジオ代","その他"];
 const EXPENSE_COLORS = { "交通費":"#3b82f6","駐車場":"#f59e0b","スタジオ代":"#8b5cf6","その他":"#6b7280" };
 const FREQS = ["毎週","隔週","月1回","月2回"];
 
-// 日本の祝日 (固定祝日のみ、簡易版)
 const FIXED_HOLIDAYS = [
-  "01-01","01-02","01-03", // 元旦
-  "02-11","02-23",         // 建国記念・天皇誕生日
-  "03-20",                 // 春分（近似）
-  "04-29",                 // 昭和の日
-  "05-03","05-04","05-05", // GW
-  "07-20",                 // 海の日（近似）
-  "08-11",                 // 山の日
-  "09-21",                 // 敬老の日（近似）
-  "09-23",                 // 秋分（近似）
-  "10-14",                 // 体育の日（近似）
-  "11-03","11-23",         // 文化の日・勤労感謝
+  "01-01","01-02","01-03",
+  "02-11","02-23",
+  "03-20",
+  "04-29",
+  "05-03","05-04","05-05",
+  "07-20",
+  "08-11",
+  "09-21",
+  "09-23",
+  "10-14",
+  "11-03","11-23",
 ];
 
 function isHoliday(year, month, day) {
@@ -54,16 +53,13 @@ function defaultCount(freq) {
   return 1;
 }
 
-
-
-// 時給 × 実分数で報酬計算
 function calcFeeFromTime(startTime, endTime, hourlyRate) {
   if (!startTime || !endTime || !hourlyRate) return 0;
   const [sh, sm] = startTime.split(":").map(Number);
   const [eh, em] = endTime.split(":").map(Number);
   const minutes = (eh * 60 + em) - (sh * 60 + sm);
   if (minutes <= 0) return 0;
-  return Math.round((hourlyRate / 60) * minutes);
+  return Math.round((Number(hourlyRate) / 60) * minutes);
 }
 
 function load(key, fallback) {
@@ -91,30 +87,46 @@ export default function App() {
   const [allLogs,     setAllLogs]     = useState(() => load("en3_logs",     {}));
   const [allExpenses, setAllExpenses] = useState(() => load("en3_expenses", {}));
   const [allSpots,    setAllSpots]    = useState(() => load("en3_spots",    {}));
-  const [allSubs,     setAllSubs]     = useState(() => load("en3_subs",     {})); // 代行
+  const [allSubs,     setAllSubs]     = useState(() => load("en3_subs",     {}));
   const [subMembers,  setSubMembersRaw] = useState(() => load("en3_sub", 0));
+
+  // 物販: 商品マスタ（全月共通）& 月次売上ログ
+  const [merch,       setMerchRaw]    = useState(() => load("en3_merch",    []));
+  const [allMerchLogs,setAllMerchLogs]= useState(() => load("en3_merch_logs", {}));
 
   const logs     = allLogs[mk]     ?? {};
   const expenses = allExpenses[mk] ?? [];
   const spots    = allSpots[mk]    ?? [];
-  const subs     = allSubs[mk]     ?? []; // 代行リスト
+  const subs     = allSubs[mk]     ?? [];
+  const merchLogs= allMerchLogs[mk] ?? [];
 
   const flash = () => { setBadge(true); setTimeout(() => setBadge(false), 1500); };
 
-  const setLogs     = useCallback(fn => setAllLogs(p     => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??{}):fn}; save("en3_logs",n); return n; }), [mk]);
-  const setExpenses = useCallback(fn => setAllExpenses(p => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_expenses",n); return n; }), [mk]);
-  const setSpots    = useCallback(fn => setAllSpots(p    => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_spots",n); return n; }), [mk]);
-  const setSubs     = useCallback(fn => setAllSubs(p     => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_subs",n); return n; }), [mk]);
+  const setLogs      = useCallback(fn => setAllLogs(p      => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??{}):fn}; save("en3_logs",n); return n; }), [mk]);
+  const setExpenses  = useCallback(fn => setAllExpenses(p  => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_expenses",n); return n; }), [mk]);
+  const setSpots     = useCallback(fn => setAllSpots(p     => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_spots",n); return n; }), [mk]);
+  const setSubs      = useCallback(fn => setAllSubs(p      => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_subs",n); return n; }), [mk]);
+  const setMerchLogs = useCallback(fn => setAllMerchLogs(p => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_merch_logs",n); return n; }), [mk]);
+  const setMerch     = (v) => { setMerchRaw(v); save("en3_merch", v); };
   const setSubMembers = v => { setSubMembersRaw(v); save("en3_sub", v); };
 
   useEffect(() => { save("en3_lessons",   lessons);   }, [lessons]);
   useEffect(() => { save("en3_paygroups", payGroups); }, [payGroups]);
 
-  // lesson fee calculation
+  // ── BUG FIX: hourlyRate を必ず Number() 変換してから calcFeeFromTime に渡す ──
   const getLessonFee = useCallback((l) => {
-    const base = l.feeMode === "calc" && l.startTime && l.endTime && l.hourlyRate
-      ? calcFeeFromTime(l.startTime, l.endTime, l.hourlyRate)
-      : (l.fee ?? 0);
+    if (l.category === "part") {
+      const rate = Number(l.hourlyRate) || 0;
+      const base = (l.startTime && l.endTime && rate)
+        ? calcFeeFromTime(l.startTime, l.endTime, rate)
+        : 0;
+      const transport = l.transportPer === "shift" ? (Number(l.transport) || 0) : 0;
+      return base + transport;
+    }
+    const rate = Number(l.hourlyRate) || 0;
+    const base = l.feeMode === "calc" && l.startTime && l.endTime && rate
+      ? calcFeeFromTime(l.startTime, l.endTime, rate)
+      : (Number(l.fee) ?? 0);
     return base + (Number(l.transport) || 0);
   }, []);
 
@@ -132,19 +144,18 @@ export default function App() {
     if (l.category === "circle") return cnt * (lg.peopleSessions ? lg.peopleSessions.reduce((a,p)=>a+p,0)/lg.peopleSessions.length : (l.defaultPeople??10)) * (l.unitPrice??0);
     if (l.category === "part") {
       const transport = Number(l.transport) || 0;
+      const rate = Number(l.hourlyRate) || 0;
       if (l.shiftType === "fixed") {
-        // 固定シフト：登録済み時間×時給×回数
-        const partFee = calcFeeFromTime(l.startTime, l.endTime, l.hourlyRate ?? 0);
+        const partFee = calcFeeFromTime(l.startTime, l.endTime, rate);
         const perShift = l.transportPer === "shift" ? transport : 0;
         const monthTransport = l.transportPer === "month" ? transport : 0;
         return cnt * (partFee + perShift) + monthTransport;
       } else {
-        // シフト制：各シフトの時間から計算
         const shifts = lg.shifts ?? [];
         const shiftTotal = shifts.reduce((sum, sh) => {
-          const fee = calcFeeFromTime(sh.startTime, sh.endTime, l.hourlyRate ?? 0);
+          const f = calcFeeFromTime(sh.startTime, sh.endTime, rate);
           const perShift = l.transportPer === "shift" ? transport : 0;
-          return sum + fee + perShift;
+          return sum + f + perShift;
         }, 0);
         const monthTransport = l.transportPer === "month" ? transport : 0;
         return shiftTotal + monthTransport;
@@ -153,11 +164,21 @@ export default function App() {
     return cnt * fee;
   }, [getLog, getLessonFee]);
 
+  // 物販収入
+  const merchIncome = useMemo(() => {
+    return merchLogs.reduce((s, log) => {
+      const item = merch.find(m => m.id === log.merchId);
+      if (!item) return s;
+      const price = log.isMember ? (item.memberPrice ?? item.price) : item.price;
+      return s + price * log.qty;
+    }, 0);
+  }, [merchLogs, merch]);
+
   const subsIncome   = subs.reduce((s,e) => s + (e.fee ?? 0), 0);
   const totalLessonIncome = useMemo(() => lessons.reduce((s,l) => s + lessonIncome(l), 0), [lessons, logs]);
   const subIncome    = subMembers * 1000;
   const spotIncome   = spots.reduce((s,e) => s + e.amount, 0);
-  const totalIncome  = totalLessonIncome + subIncome + spotIncome + subsIncome;
+  const totalIncome  = totalLessonIncome + subIncome + spotIncome + subsIncome + merchIncome;
   const totalExpenses= expenses.reduce((s,e) => s + Number(e.amount), 0);
   const netIncome    = totalIncome - totalExpenses;
 
@@ -252,6 +273,15 @@ export default function App() {
   const [showAddPayGroup,setShowAddPayGroup]= useState(false);
   const [showAddSub,     setShowAddSub]     = useState(false);
 
+  // 物販フォーム
+  const blankMerch = { name:"", price:"", memberPrice:"", hasMemberPrice:false, note:"" };
+  const [mForm, setMForm] = useState(blankMerch);
+  const [editMerch, setEditMerch] = useState(null);
+  const [showAddMerch, setShowAddMerch] = useState(false);
+  const blankSale = { merchId:"", qty:1, isMember:false, date:`${mk}-01`, note:"" };
+  const [saleForm, setSaleForm] = useState(blankSale);
+  const [showAddSale, setShowAddSale] = useState(false);
+
   const [spotForm, setSpotForm] = useState({ name:"", date:`${mk}-01`, amount:"", note:"" });
   const [expForm,  setExpForm]  = useState({ category:"交通費", amount:"", date:`${mk}-01`, note:"" });
   const [pgForm,   setPgForm]   = useState({ name:"", payDay:"", lessonIds:[] });
@@ -267,6 +297,7 @@ export default function App() {
     const at = a.startTime || "00:00", bt = b.startTime || "00:00";
     return at.localeCompare(bt);
   });
+
   const saveLesson = () => {
     if (!lForm.place) return;
     const fee = lForm.feeMode === "calc" ? calcFeeFromTime(lForm.startTime, lForm.endTime, Number(lForm.hourlyRate)) : Number(lForm.fee)||0;
@@ -286,6 +317,32 @@ export default function App() {
     setSubs(p=>[...p,{id:Date.now(),...subForm,place:l?.place??"",fee}]);
     setShowAddSub(false); flash();
   };
+
+  // 物販保存
+  const saveMerch = () => {
+    if (!mForm.name || !mForm.price) return;
+    const item = { ...mForm, id: editMerch ?? Date.now(), price: Number(mForm.price)||0, memberPrice: mForm.hasMemberPrice ? Number(mForm.memberPrice)||0 : null };
+    setMerch(editMerch ? merch.map(x=>x.id===editMerch?item:x) : [...merch, item]);
+    setEditMerch(null); setShowAddMerch(false); setMForm(blankMerch); flash();
+  };
+  const deleteMerch = id => { if(window.confirm("この商品を削除しますか？")) { setMerch(merch.filter(x=>x.id!==id)); flash(); }};
+  const saveSale = () => {
+    if (!saleForm.merchId) return;
+    setMerchLogs(p => [...p, { id:Date.now(), ...saleForm, qty:Number(saleForm.qty)||1, merchId:Number(saleForm.merchId) }]);
+    setShowAddSale(false); setSaleForm(blankSale); flash();
+  };
+
+  // 物販: 商品ごとの集計
+  const merchStats = useMemo(() => {
+    return merch.map(item => {
+      const logs = merchLogs.filter(l => l.merchId === item.id);
+      const normalQty  = logs.filter(l=>!l.isMember).reduce((s,l)=>s+l.qty,0);
+      const memberQty  = logs.filter(l=> l.isMember).reduce((s,l)=>s+l.qty,0);
+      const normalSales= normalQty * item.price;
+      const memberSales= memberQty * (item.memberPrice ?? item.price);
+      return { ...item, normalQty, memberQty, normalSales, memberSales, totalSales: normalSales+memberSales };
+    });
+  }, [merch, merchLogs]);
 
   const prevMonth = () => { if(calMonth===1){setCalYear(y=>y-1);setCalMonth(12);}else setCalMonth(m=>m-1); setSelDay(null); };
   const nextMonth = () => { if(calMonth===12){setCalYear(y=>y+1);setCalMonth(1);}else setCalMonth(m=>m+1); setSelDay(null); };
@@ -309,7 +366,7 @@ export default function App() {
           <button onClick={nextMonth} style={{background:"none",border:"none",color:"white",fontSize:22,cursor:"pointer"}}>›</button>
         </div>
         <div style={{display:"flex",overflowX:"auto"}}>
-          {[["calendar","📅"],["input","📝"],["expenses","💸"],["lessons","⚙️"],["analysis","📊"]].map(([key,icon])=>(
+          {[["calendar","📅"],["input","📝"],["expenses","💸"],["lessons","⚙️"],["merch","🛍️"],["analysis","📊"]].map(([key,icon])=>(
             <button key={key} onClick={()=>setTab(key)}
               style={{flexShrink:0,flex:1,padding:"9px 8px",background:"none",border:"none",borderBottom:tab===key?"2px solid white":"2px solid transparent",color:tab===key?"white":"#ffffff80",fontWeight:700,fontSize:22,cursor:"pointer"}}>
               {icon}
@@ -338,6 +395,7 @@ export default function App() {
               return <div key={key} style={{background:cat.color+"12",borderRadius:8,padding:"5px 10px",border:`1px solid ${cat.color}25`}}><span style={{fontSize:13,color:cat.color,fontWeight:700}}>{cat.icon} {cat.label}</span><span style={{fontSize:13,fontFamily:"'DM Mono',monospace",color:cat.color,marginLeft:6}}>¥{inc.toLocaleString()}</span></div>;
             })}
             {subIncome>0&&<div style={{background:"#10b98112",borderRadius:8,padding:"5px 10px",border:"1px solid #10b98125"}}><span style={{fontSize:10,color:"#10b981",fontWeight:700}}>📱 サブスク</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#10b981",marginLeft:6}}>¥{subIncome.toLocaleString()}</span></div>}
+            {merchIncome>0&&<div style={{background:"#ec489912",borderRadius:8,padding:"5px 10px",border:"1px solid #ec489925"}}><span style={{fontSize:13,color:"#ec4899",fontWeight:700}}>🛍️ 物販</span><span style={{fontSize:13,fontFamily:"'DM Mono',monospace",color:"#ec4899",marginLeft:6}}>¥{merchIncome.toLocaleString()}</span></div>}
           </div>
         </div>
 
@@ -418,6 +476,7 @@ export default function App() {
                   const skipped = isSkipped(l.id,selDay);
                   const rest    = isRestDay(l,selDay);
                   const cat     = CATEGORIES[l.category];
+                  // ── BUG FIX: カレンダー表示もgetLessonFee（Number変換済み）を使う ──
                   const fee     = getLessonFee(l);
                   return (
                     <div key={l.id} onClick={()=>!rest&&toggleSkip(l.id,selDay)}
@@ -500,7 +559,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ INPUT（サークルのみ） ══ */}
+        {/* ══ INPUT（サークル・メンバー） ══ */}
         {tab==="input"&&(
           <div>
             <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>🏃 サークル・人数入力</div>
@@ -514,103 +573,20 @@ export default function App() {
                     <div><div style={{fontSize:14,fontWeight:700}}>{cat.icon} {l.lessonName||l.place}</div><div style={{fontSize:11,color:"#94a3b8"}}>{l.place} {l.startTime&&l.endTime?`${l.startTime}〜${l.endTime} · `:""}<span style={{color:"#f59e0b"}}>{l.freq}</span></div></div>
                     <div style={{fontSize:18,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
                   </div>
-                  {/* サークル：人数入力 */}
-                  {l.category==="circle" && (
-                    <>
-                      {Array.from({length:lg.count??1}).map((_,si)=>(
-                        <div key={si} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
-                          <div style={{fontSize:14,color:"#94a3b8",minWidth:50}}>{si+1}回目</div>
-                          <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.peopleSessions??Array(cur.count??1).fill(l.defaultPeople))];s[si]=Math.max(1,(s[si]??l.defaultPeople)-1);return{...p,[l.id]:{...cur,peopleSessions:s}};});flash();}} style={cBtn}>－</button>
-                          <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(getLog(l.id).peopleSessions?.[si]??l.defaultPeople)}</span>
-                          <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.peopleSessions??Array(cur.count??1).fill(l.defaultPeople))];s[si]=(s[si]??l.defaultPeople)+1;return{...p,[l.id]:{...cur,peopleSessions:s}};});flash();}} style={cBtn}>＋</button>
-                          <span style={{fontSize:13,color:"#94a3b8"}}>人</span>
-                          <span style={{fontSize:14,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((getLog(l.id).peopleSessions?.[si]??l.defaultPeople)*l.unitPrice).toLocaleString()}</span>
-                        </div>
-                      ))}
-                      <div style={{display:"flex",gap:8,marginTop:4}}>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:Math.max(1,(cur.count??1)-1)}};});flash();}} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 －</button>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:(cur.count??1)+1}};});flash();}} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 ＋</button>
-                      </div>
-                    </>
-                  )}
-
-                  {/* アルバイト：シフト入力 */}
-                  {l.category==="part" && (
-                    <>
-                      {/* 固定シフトの場合 */}
-                      {l.shiftType==="fixed" ? (
-                        <>
-                          <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",marginBottom:10,border:"1px solid #fed7aa"}}>
-                            <div style={{fontSize:14,color:"#64748b",marginBottom:4}}>固定シフト：{SCHED_DAYS[l.day]}曜 {l.startTime}〜{l.endTime}</div>
-                            <div style={{fontSize:16,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
-                              1回 ¥{calcFeeFromTime(l.startTime,l.endTime,l.hourlyRate??0).toLocaleString()}
-                              {Number(l.transport)>0&&<span style={{fontSize:13,color:"#10b981",marginLeft:6}}>+交通費¥{Number(l.transport).toLocaleString()}/回</span>}
-                            </div>
-                          </div>
-                          <div style={{fontSize:14,color:"#64748b",marginBottom:8}}>今月の出勤回数</div>
-                          <div style={{display:"flex",alignItems:"center",gap:12,background:"#f8fafc",borderRadius:10,padding:"12px 16px",marginBottom:8}}>
-                            <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:Math.max(0,(cur.count??0)-1)}};});flash();}} style={cBtn}>－</button>
-                            <span style={{fontSize:28,fontWeight:700,minWidth:50,textAlign:"center",fontFamily:"'DM Mono',monospace",color:cat.color}}>{lg.count??0}</span>
-                            <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:(cur.count??0)+1}};});flash();}} style={cBtn}>＋</button>
-                            <span style={{fontSize:14,color:"#64748b"}}>回</span>
-                            <span style={{fontSize:15,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>
-                              ¥{((calcFeeFromTime(l.startTime,l.endTime,l.hourlyRate??0)+Number(l.transport||0))*(lg.count??0)).toLocaleString()}
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {/* シフト制：1件ずつ入力 */}
-                          {(lg.shifts??[]).map((sh,si)=>(
-                            <div key={si} style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",marginBottom:8,border:"1px solid #e2e8f0"}}>
-                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                                <div style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{si+1}回目</div>
-                                <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=(cur.shifts??[]).filter((_,i)=>i!==si);return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"4px 10px",color:"#ef4444",fontSize:12,cursor:"pointer",...F}}>削除</button>
-                              </div>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
-                                <div>
-                                  <div style={{fontSize:12,color:"#94a3b8",marginBottom:4}}>開始</div>
-                                  <select value={sh.startTime||""} onChange={e=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],startTime:e.target.value};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}}
-                                    style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #e2e8f0",background:"white",fontSize:14,...F}}>
-                                    <option value="">--</option>
-                                    {Array.from({length:(22-8)*2+1},(_,i)=>{const h=8+Math.floor(i/2),m=i%2===0?0:30;return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
-                                  </select>
-                                </div>
-                                <div>
-                                  <div style={{fontSize:12,color:"#94a3b8",marginBottom:4}}>終了</div>
-                                  <select value={sh.endTime||""} onChange={e=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],endTime:e.target.value};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}}
-                                    style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #e2e8f0",background:"white",fontSize:14,...F}}>
-                                    <option value="">--</option>
-                                    {Array.from({length:(22-8)*2+1},(_,i)=>{const h=8+Math.floor(i/2),m=i%2===0?0:30;return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
-                                  </select>
-                                </div>
-                              </div>
-                              {sh.startTime&&sh.endTime&&(
-                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff7ed",borderRadius:8,padding:"8px 12px"}}>
-                                  <span style={{fontSize:13,color:"#64748b"}}>{sh.startTime}〜{sh.endTime} · {Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}時間{calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}分`:""}</span>
-                                  <span style={{fontSize:14,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
-                                    ¥{(calcFeeFromTime(sh.startTime,sh.endTime,l.hourlyRate??0)+(l.transportPer==="shift"?Number(l.transport||0):0)).toLocaleString()}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                          <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[]),{startTime:"",endTime:""}];return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}}
-                            style={{width:"100%",padding:"12px",borderRadius:10,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>
-                            ＋ シフトを追加
-                          </button>
-                        </>
-                      )}
-
-                      {/* 交通費まとめ支給 */}
-                      {l.transportPer==="month"&&Number(l.transport)>0&&(
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f0fdf4",borderRadius:10,padding:"10px 14px",marginTop:8,border:"1px solid #bbf7d0"}}>
-                          <span style={{fontSize:14,color:"#10b981",fontWeight:600}}>🚗 交通費（月まとめ支給）</span>
-                          <span style={{fontSize:15,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>+¥{Number(l.transport).toLocaleString()}</span>
-                        </div>
-                      )}
-                    </>
-                  )}
+                  {Array.from({length:lg.count??1}).map((_,si)=>(
+                    <div key={si} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
+                      <div style={{fontSize:14,color:"#94a3b8",minWidth:50}}>{si+1}回目</div>
+                      <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.peopleSessions??Array(cur.count??1).fill(l.defaultPeople))];s[si]=Math.max(1,(s[si]??l.defaultPeople)-1);return{...p,[l.id]:{...cur,peopleSessions:s}};});flash();}} style={cBtn}>－</button>
+                      <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(getLog(l.id).peopleSessions?.[si]??l.defaultPeople)}</span>
+                      <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const s=[...(cur.peopleSessions??Array(cur.count??1).fill(l.defaultPeople))];s[si]=(s[si]??l.defaultPeople)+1;return{...p,[l.id]:{...cur,peopleSessions:s}};});flash();}} style={cBtn}>＋</button>
+                      <span style={{fontSize:13,color:"#94a3b8"}}>人</span>
+                      <span style={{fontSize:14,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((getLog(l.id).peopleSessions?.[si]??l.defaultPeople)*l.unitPrice).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  <div style={{display:"flex",gap:8,marginTop:4}}>
+                    <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:Math.max(1,(cur.count??1)-1)}};});flash();}} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 －</button>
+                    <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:(cur.count??1)+1}};});flash();}} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 ＋</button>
+                  </div>
                 </div>
               );
             })}
@@ -629,132 +605,6 @@ export default function App() {
                 <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* ══ PART TIME ══ */}
-        {tab==="parttime"&&(
-          <div>
-            <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>💼 アルバイト シフト管理</div>
-            {lessons.filter(l=>l.category==="part").length===0&&(
-              <div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:15}}>
-                <div style={{fontSize:40,marginBottom:8}}>💼</div>
-                ⚙️ レッスン管理からアルバイトを追加してね
-              </div>
-            )}
-            {lessons.filter(l=>l.category==="part").map(l=>{
-              const cat=CATEGORIES[l.category];
-              const lg=getLog(l.id);
-              const inc=lessonIncome(l);
-              return (
-                <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
-                  {/* ヘッダー */}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-                    <div>
-                      <div style={{fontSize:18,fontWeight:700}}>{cat.icon} {l.lessonName||l.place}</div>
-                      <div style={{fontSize:14,color:"#94a3b8"}}>{l.place} · 時給¥{(l.hourlyRate??0).toLocaleString()}</div>
-                      <div style={{fontSize:13,color:"#f97316",marginTop:2}}>{l.shiftType==="fixed"?"📅 固定シフト":"🔄 シフト制"}</div>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>今月収入</div>
-                      <div style={{fontSize:20,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
-                    </div>
-                  </div>
-
-                  {/* 固定シフト */}
-                  {l.shiftType==="fixed" ? (
-                    <>
-                      <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",marginBottom:12,border:"1px solid #fed7aa"}}>
-                        <div style={{fontSize:14,color:"#64748b",marginBottom:4}}>
-                          {SCHED_DAYS[l.day]}曜 {l.startTime}〜{l.endTime}
-                          {l.startTime&&l.endTime&&<span style={{marginLeft:8,color:"#f97316",fontWeight:600}}>
-                            {Math.floor(calcFeeFromTime(l.startTime,l.endTime,1)/60)}時間{calcFeeFromTime(l.startTime,l.endTime,1)%60>0?`${calcFeeFromTime(l.startTime,l.endTime,1)%60}分`:""}
-                          </span>}
-                        </div>
-                        <div style={{fontSize:16,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
-                          1回 ¥{calcFeeFromTime(l.startTime,l.endTime,l.hourlyRate??0).toLocaleString()}
-                          {l.transportPer==="shift"&&Number(l.transport)>0&&<span style={{fontSize:13,color:"#10b981",marginLeft:6}}>+交通費¥{Number(l.transport).toLocaleString()}</span>}
-                        </div>
-                      </div>
-                      <div style={{fontSize:15,color:"#64748b",marginBottom:10,fontWeight:600}}>今月の出勤回数</div>
-                      <div style={{display:"flex",alignItems:"center",gap:16,background:"#f8fafc",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:Math.max(0,(cur.count??0)-1)}};});flash();}} style={cBtn}>－</button>
-                        <div style={{textAlign:"center",flex:1}}>
-                          <div style={{fontSize:36,fontWeight:700,fontFamily:"'DM Mono',monospace",color:cat.color}}>{lg.count??0}</div>
-                          <div style={{fontSize:13,color:"#94a3b8"}}>回出勤</div>
-                        </div>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:(cur.count??0)+1}};});flash();}} style={cBtn}>＋</button>
-                      </div>
-                      {/* 合計 */}
-                      <div style={{background:"#fff7ed",borderRadius:10,padding:"10px 14px",border:"1px solid #fed7aa"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={{fontSize:14,color:"#64748b"}}>合計勤務時間</span>
-                          <span style={{fontSize:15,fontWeight:700,color:"#f97316"}}>
-                            {Math.floor(calcFeeFromTime(l.startTime,l.endTime,1)/60*(lg.count??0))}時間
-                            {calcFeeFromTime(l.startTime,l.endTime,1)%60>0?`${calcFeeFromTime(l.startTime,l.endTime,1)%60*(lg.count??0)}分`:""}
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* シフト制 */}
-                      {(lg.shifts??[]).map((sh,si)=>(
-                        <div key={si} style={{background:"#f8fafc",borderRadius:12,padding:"14px",marginBottom:10,border:"1px solid #e2e8f0"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                            <div style={{fontSize:15,fontWeight:700,color:"#1e293b"}}>シフト {si+1}</div>
-                            <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=(cur.shifts??[]).filter((_,i)=>i!==si);return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:13,cursor:"pointer",...F}}>削除</button>
-                          </div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
-                            <div>
-                              <div style={{fontSize:13,color:"#94a3b8",marginBottom:6}}>開始時間</div>
-                              <TimePicker label="" value={sh.startTime||""} onChange={v=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],startTime:v};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}} compact/>
-                            </div>
-                            <div>
-                              <div style={{fontSize:13,color:"#94a3b8",marginBottom:6}}>終了時間</div>
-                              <TimePicker label="" value={sh.endTime||""} onChange={v=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],endTime:v};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}} compact/>
-                            </div>
-                          </div>
-                          {sh.startTime&&sh.endTime&&(
-                            <div style={{background:"#fff7ed",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between"}}>
-                              <span style={{fontSize:13,color:"#64748b"}}>
-                                {sh.startTime}〜{sh.endTime} · {Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}時間{calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}分`:""}
-                              </span>
-                              <span style={{fontSize:14,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
-                                ¥{(calcFeeFromTime(sh.startTime,sh.endTime,l.hourlyRate??0)+(l.transportPer==="shift"?Number(l.transport||0):0)).toLocaleString()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[]),{startTime:"",endTime:""}];return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}}
-                        style={{width:"100%",padding:"14px",borderRadius:12,border:"1px dashed #f97316",background:"#fff7ed",color:"#f97316",fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:10,...F}}>
-                        ＋ シフトを追加
-                      </button>
-                      {/* 合計 */}
-                      {(lg.shifts??[]).length>0&&(
-                        <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",border:"1px solid #fed7aa"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                            <span style={{fontSize:14,color:"#64748b"}}>合計勤務時間</span>
-                            <span style={{fontSize:15,fontWeight:700,color:"#f97316"}}>
-                              {(()=>{const mins=(lg.shifts??[]).reduce((s,sh)=>s+calcFeeFromTime(sh.startTime,sh.endTime,1),0);return `${Math.floor(mins/60)}時間${mins%60>0?`${mins%60}分`:""}`;})()}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* 交通費まとめ支給 */}
-                  {l.transportPer==="month"&&Number(l.transport)>0&&(
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f0fdf4",borderRadius:10,padding:"12px 14px",marginTop:10,border:"1px solid #bbf7d0"}}>
-                      <span style={{fontSize:15,color:"#10b981",fontWeight:700}}>🚗 交通費（月まとめ支給）</span>
-                      <span style={{fontSize:16,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>+¥{Number(l.transport).toLocaleString()}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
           </div>
         )}
 
@@ -806,8 +656,8 @@ export default function App() {
                         </div>
                         <div style={{fontSize:12,fontWeight:700,color:cat.color,marginTop:2,fontFamily:"'DM Mono',monospace"}}>
                           {key==="regular"&&`¥${getLessonFee(l).toLocaleString()}/回`}
-                          {key==="circle"&&`¥${l.unitPrice.toLocaleString()}/人`}
-                          {key==="part"&&`¥${l.hourlyRate.toLocaleString()}/時間`}
+                          {key==="circle"&&`¥${(l.unitPrice??0).toLocaleString()}/人`}
+                          {key==="part"&&`¥${(Number(l.hourlyRate)||0).toLocaleString()}/時間`}
                           {key==="event"&&`¥${getLessonFee(l).toLocaleString()}`}
                           {l.feeMode==="calc"&&<span style={{fontSize:10,color:"#94a3b8",marginLeft:4}}>（時給計算）</span>}
                         </div>
@@ -838,12 +688,114 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ MERCH 物販 ══ */}
+        {tab==="merch"&&(
+          <div>
+            {/* 月間サマリー */}
+            <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <div>
+                  <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:4}}>今月の物販売上</div>
+                  <div style={{fontSize:32,fontWeight:700,fontFamily:"'DM Mono',monospace",color:"#ec4899"}}>¥{merchIncome.toLocaleString()}</div>
+                </div>
+                <button onClick={()=>{setSaleForm({...blankSale, date:`${mk}-01`});setShowAddSale(true);}}
+                  style={{padding:"10px 16px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#ec4899,#f97316)",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>
+                  ＋ 売上入力
+                </button>
+              </div>
+              {/* 商品別集計バー */}
+              {merchStats.filter(m=>m.totalSales>0).map(m=>{
+                const pct = merchIncome > 0 ? m.totalSales/merchIncome*100 : 0;
+                return (
+                  <div key={m.id} style={{marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{fontSize:13,fontWeight:600}}>{m.name}</span>
+                      <span style={{fontSize:13,fontFamily:"'DM Mono',monospace",color:"#ec4899"}}>
+                        ¥{m.totalSales.toLocaleString()}
+                        <span style={{fontSize:10,color:"#94a3b8",marginLeft:4}}>({pct.toFixed(0)}%)</span>
+                      </span>
+                    </div>
+                    <div style={{height:8,background:"#f1f5f9",borderRadius:4}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#ec4899,#f97316)",borderRadius:4}}/>
+                    </div>
+                    <div style={{display:"flex",gap:12,marginTop:4}}>
+                      {m.normalQty>0&&<span style={{fontSize:11,color:"#64748b"}}>通常 {m.normalQty}枚 · ¥{m.normalSales.toLocaleString()}</span>}
+                      {m.memberQty>0&&<span style={{fontSize:11,color:"#ec4899"}}>👑 メンバー {m.memberQty}枚 · ¥{m.memberSales.toLocaleString()}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+              {merchIncome===0&&<div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"8px 0"}}>まだ今月の売上なし</div>}
+            </div>
+
+            {/* 売上履歴 */}
+            {merchLogs.length>0&&(
+              <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#64748b",marginBottom:12}}>📋 今月の売上履歴</div>
+                {[...merchLogs].reverse().map(log=>{
+                  const item = merch.find(m=>m.id===log.merchId);
+                  if(!item) return null;
+                  const price = log.isMember ? (item.memberPrice??item.price) : item.price;
+                  const total = price * log.qty;
+                  return (
+                    <div key={log.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
+                      <div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                          {log.isMember&&<span style={{fontSize:10,background:"#fdf4ff",color:"#a855f7",border:"1px solid #e9d5ff",borderRadius:6,padding:"1px 6px",fontWeight:700}}>👑 メンバー</span>}
+                          <span style={{fontSize:14,fontWeight:700}}>{item.name}</span>
+                        </div>
+                        <div style={{fontSize:11,color:"#94a3b8"}}>{log.date.split("-").slice(1).join("/")} · {log.qty}枚 × ¥{price.toLocaleString()} {log.note&&`· ${log.note}`}</div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:15,fontWeight:700,color:"#ec4899",fontFamily:"'DM Mono',monospace"}}>¥{total.toLocaleString()}</span>
+                        <button onClick={()=>{setMerchLogs(p=>p.filter(x=>x.id!==log.id));flash();}} style={delBtn}>削除</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 商品マスタ管理 */}
+            <div style={{background:"white",borderRadius:16,padding:16,boxShadow:"0 2px 12px #00000012"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#64748b"}}>🏷️ 商品マスタ</div>
+                <button onClick={()=>{setEditMerch(null);setMForm(blankMerch);setShowAddMerch(true);}}
+                  style={{fontSize:12,color:"#ec4899",background:"#fdf2f8",border:"1px solid #fbcfe8",borderRadius:8,padding:"5px 12px",cursor:"pointer",...F}}>＋ 商品追加</button>
+              </div>
+              {merch.length===0&&(
+                <div style={{textAlign:"center",color:"#94a3b8",padding:"24px 0",fontSize:13}}>
+                  <div style={{fontSize:36,marginBottom:8}}>🛍️</div>
+                  商品を登録してから売上を入力してね
+                </div>
+              )}
+              {merch.map(item=>(
+                <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:"1px solid #f1f5f9"}}>
+                  <div>
+                    <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{item.name}</div>
+                    <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                      <span style={{fontSize:13,color:"#64748b",fontFamily:"'DM Mono',monospace"}}>¥{item.price.toLocaleString()}</span>
+                      {item.memberPrice&&<span style={{fontSize:12,color:"#a855f7",background:"#fdf4ff",border:"1px solid #e9d5ff",borderRadius:6,padding:"1px 8px",fontFamily:"'DM Mono',monospace"}}>👑 ¥{item.memberPrice.toLocaleString()}</span>}
+                    </div>
+                    {item.note&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{item.note}</div>}
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>{setEditMerch(item.id);setMForm({...item,price:String(item.price),memberPrice:String(item.memberPrice||""),hasMemberPrice:!!item.memberPrice});setShowAddMerch(true);}}
+                      style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"4px 10px",color:"#3b82f6",fontSize:12,cursor:"pointer",...F}}>編集</button>
+                    <button onClick={()=>deleteMerch(item.id)} style={delBtn}>削除</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ══ ANALYSIS ══ */}
         {tab==="analysis"&&(
           <div>
             <div style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
               <div style={{fontSize:16,fontWeight:700,color:"#64748b",marginBottom:16}}>📊 収入内訳</div>
-              {[...Object.entries(CATEGORIES).map(([key,cat])=>[cat.label,key==="sub"?subsIncome:lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),["サブスク",subIncome,"#10b981"],["スポット",spotIncome,"#64748b"]].filter(([,v])=>v>0).map(([l,v,c])=>{
+              {[...Object.entries(CATEGORIES).map(([key,cat])=>[cat.label,key==="sub"?subsIncome:lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),["サブスク",subIncome,"#10b981"],["物販",merchIncome,"#ec4899"],["スポット",spotIncome,"#64748b"]].filter(([,v])=>v>0).map(([l,v,c])=>{
                 const pct=totalIncome>0?v/totalIncome*100:0;
                 return <div key={l} style={{marginBottom:12}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12}}>{l}</span><span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:c}}>¥{v.toLocaleString()} <span style={{color:"#94a3b8",fontSize:10}}>({pct.toFixed(0)}%)</span></span></div><div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:`${pct}%`,background:c,borderRadius:4}}/></div></div>;
               })}
@@ -883,14 +835,13 @@ export default function App() {
           <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
             {SCHED_DAYS.map((d,i)=>(
               <button key={i} onClick={()=>setLForm(f=>({...f,day:i}))}
-                style={{padding:"6px 12px",borderRadius:8,border:Number(lForm.day)===i?"2px solid #3b82f6":"2px solid #e2e8f0",background:Number(lForm.day)===i?"#eff6ff":"white",color:Number(lForm.day)===i?"#3b82f6":"#64748b",fontSize:15,cursor:"pointer",padding:"8px 14px",...F}}>{d}</button>
+                style={{padding:"8px 14px",borderRadius:8,border:Number(lForm.day)===i?"2px solid #3b82f6":"2px solid #e2e8f0",background:Number(lForm.day)===i?"#eff6ff":"white",color:Number(lForm.day)===i?"#3b82f6":"#64748b",fontSize:15,cursor:"pointer",...F}}>{d}</button>
             ))}
           </div>
 
           <TimePicker label="開始時間" value={lForm.startTime} onChange={v=>setLForm(f=>({...f,startTime:v}))}/>
           <TimePicker label="終了時間" value={lForm.endTime} onChange={v=>setLForm(f=>({...f,endTime:v}))}/>
 
-          {/* fee mode */}
           {(lForm.category==="regular"||lForm.category==="event")&&(
             <>
               <Label>報酬の計算方法</Label>
@@ -1033,6 +984,97 @@ export default function App() {
             ))}
           </div>
           <button onClick={savePayGroup} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"#f59e0b",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>追加する</button>
+        </Modal>
+      )}
+
+      {/* 物販：商品追加モーダル */}
+      {showAddMerch&&(
+        <Modal onClose={()=>{setShowAddMerch(false);setEditMerch(null);setMForm(blankMerch);}} title={editMerch?"✏️ 商品を編集":"🛍️ 商品を追加"} color="#ec4899">
+          <Label>商品名</Label>
+          <LInput value={mForm.name} onChange={v=>setMForm(f=>({...f,name:v}))} placeholder="例：ENARIZEオリジナルTシャツ"/>
+          <Label>通常価格（円）</Label>
+          <LInput type="number" value={mForm.price} onChange={v=>setMForm(f=>({...f,price:v}))} placeholder="例：4500"/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <span style={{fontSize:14,color:"#64748b",fontWeight:600}}>👑 メンバー価格あり</span>
+            <button onClick={()=>setMForm(f=>({...f,hasMemberPrice:!f.hasMemberPrice,memberPrice:""}))}
+              style={{width:48,height:26,borderRadius:13,background:mForm.hasMemberPrice?"#a855f7":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+              <div style={{width:20,height:20,borderRadius:"50%",background:"white",position:"absolute",top:3,left:mForm.hasMemberPrice?25:3,transition:"left 0.2s"}}/>
+            </button>
+          </div>
+          {mForm.hasMemberPrice&&(
+            <>
+              <Label>メンバー価格（円）</Label>
+              <LInput type="number" value={mForm.memberPrice} onChange={v=>setMForm(f=>({...f,memberPrice:v}))} placeholder="例：4000"/>
+              {mForm.price&&mForm.memberPrice&&(
+                <div style={{background:"#fdf4ff",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:"#a855f7",fontWeight:700}}>
+                  割引率：{Math.round((1-Number(mForm.memberPrice)/Number(mForm.price))*100)}% OFF
+                </div>
+              )}
+            </>
+          )}
+          <Label>メモ（任意）</Label>
+          <LInput value={mForm.note} onChange={v=>setMForm(f=>({...f,note:v}))} placeholder="例：7.1oz ヘビーウェイト"/>
+          <button onClick={saveMerch} style={{width:"100%",padding:16,borderRadius:12,border:"none",background:"linear-gradient(135deg,#ec4899,#f97316)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",...F}}>
+            {editMerch?"更新する":"追加する"}
+          </button>
+        </Modal>
+      )}
+
+      {/* 物販：売上入力モーダル */}
+      {showAddSale&&(
+        <Modal onClose={()=>setShowAddSale(false)} title="💰 売上を入力" color="#ec4899">
+          <Label>商品</Label>
+          <div style={{marginBottom:14}}>
+            {merch.length===0&&<div style={{fontSize:13,color:"#94a3b8",padding:"8px 0"}}>先に商品マスタから商品を登録してください</div>}
+            {merch.map(item=>(
+              <div key={item.id} onClick={()=>setSaleForm(f=>({...f,merchId:String(item.id)}))}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,marginBottom:6,background:saleForm.merchId===String(item.id)?"#fdf2f8":"#f8fafc",border:saleForm.merchId===String(item.id)?"2px solid #ec4899":"2px solid #e2e8f0",cursor:"pointer"}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:saleForm.merchId===String(item.id)?"#ec4899":"white",border:"2px solid",borderColor:saleForm.merchId===String(item.id)?"#ec4899":"#e2e8f0"}}/>
+                <div style={{flex:1}}>
+                  <span style={{fontSize:14,fontWeight:700}}>{item.name}</span>
+                  {item.memberPrice&&<span style={{fontSize:11,color:"#a855f7",marginLeft:6}}>/ メンバー ¥{item.memberPrice.toLocaleString()}</span>}
+                </div>
+                <span style={{fontSize:14,color:"#ec4899",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>¥{item.price.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+
+          {saleForm.merchId&&(()=>{
+            const item = merch.find(m=>String(m.id)===saleForm.merchId);
+            return item?.memberPrice ? (
+              <>
+                <Label>価格区分</Label>
+                <div style={{display:"flex",gap:8,marginBottom:14}}>
+                  {[["false","通常価格"],["true","👑 メンバー価格"]].map(([val,label])=>(
+                    <button key={val} onClick={()=>setSaleForm(f=>({...f,isMember:val==="true"}))}
+                      style={{flex:1,padding:"10px",borderRadius:10,border:String(saleForm.isMember)===val?"2px solid #a855f7":"2px solid #e2e8f0",background:String(saleForm.isMember)===val?"#fdf4ff":"white",color:String(saleForm.isMember)===val?"#a855f7":"#64748b",fontSize:13,cursor:"pointer",fontWeight:String(saleForm.isMember)===val?700:400,...F}}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null;
+          })()}
+
+          <Label>枚数</Label>
+          <div style={{display:"flex",alignItems:"center",gap:12,background:"#f8fafc",borderRadius:10,padding:"10px 14px",marginBottom:18}}>
+            <button onClick={()=>setSaleForm(f=>({...f,qty:Math.max(1,f.qty-1)}))} style={cBtn}>－</button>
+            <span style={{fontSize:28,fontWeight:700,minWidth:50,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#ec4899"}}>{saleForm.qty}</span>
+            <button onClick={()=>setSaleForm(f=>({...f,qty:f.qty+1}))} style={cBtn}>＋</button>
+            <span style={{fontSize:13,color:"#64748b"}}>枚</span>
+            {saleForm.merchId&&(()=>{
+              const item=merch.find(m=>String(m.id)===saleForm.merchId);
+              const price=saleForm.isMember?(item?.memberPrice??item?.price??0):item?.price??0;
+              return <span style={{marginLeft:"auto",fontSize:16,fontWeight:700,color:"#ec4899",fontFamily:"'DM Mono',monospace"}}>¥{(price*saleForm.qty).toLocaleString()}</span>;
+            })()}
+          </div>
+
+          <Label>日付</Label><LInput type="date" value={saleForm.date} onChange={v=>setSaleForm(f=>({...f,date:v}))}/>
+          <Label>メモ（任意）</Label><LInput value={saleForm.note} onChange={v=>setSaleForm(f=>({...f,note:v}))} placeholder="例：レッスン後に販売"/>
+          <button onClick={saveSale} disabled={!saleForm.merchId}
+            style={{width:"100%",padding:16,borderRadius:12,border:"none",background:saleForm.merchId?"linear-gradient(135deg,#ec4899,#f97316)":"#e2e8f0",color:saleForm.merchId?"white":"#94a3b8",fontWeight:700,fontSize:17,cursor:saleForm.merchId?"pointer":"not-allowed",...F}}>
+            売上を記録する
+          </button>
         </Modal>
       )}
     </div>
