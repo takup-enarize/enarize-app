@@ -145,21 +145,25 @@ export default function App() {
     if (l.category === "part") {
       const transport = Number(l.transport) || 0;
       const rate = Number(l.hourlyRate) || 0;
-      if (l.shiftType === "fixed") {
-        const partFee = calcFeeFromTime(l.startTime, l.endTime, rate);
+      const dayShifts = l.dayShifts ?? {};
+      // 今月の各日付を走査して出勤日を集計
+      const lastDay = new Date(calYear, calMonth, 0).getDate();
+      let total = 0;
+      for (let d = 1; d <= lastDay; d++) {
+        const dow = new Date(calYear, calMonth-1, d).getDay(); // 0=日
+        const ds = `${mk}-${String(d).padStart(2,"0")}`;
+        const absent = (lg.absentDates ?? []).includes(ds);
+        if (absent) continue;
+        // SCHED_DAYS index: 月=0...日=6  ←  dow: 日=0,月=1...土=6
+        const si = dow === 0 ? 6 : dow - 1;
+        const shift = dayShifts[si];
+        if (!shift || !shift.enabled || !shift.startTime || !shift.endTime) continue;
+        const wage = calcFeeFromTime(shift.startTime, shift.endTime, rate);
         const perShift = l.transportPer === "shift" ? transport : 0;
-        const monthTransport = l.transportPer === "month" ? transport : 0;
-        return cnt * (partFee + perShift) + monthTransport;
-      } else {
-        const shifts = lg.shifts ?? [];
-        const shiftTotal = shifts.reduce((sum, sh) => {
-          const f = calcFeeFromTime(sh.startTime, sh.endTime, rate);
-          const perShift = l.transportPer === "shift" ? transport : 0;
-          return sum + f + perShift;
-        }, 0);
-        const monthTransport = l.transportPer === "month" ? transport : 0;
-        return shiftTotal + monthTransport;
+        total += wage + perShift;
       }
+      const monthTransport = l.transportPer === "month" ? transport : 0;
+      return total + monthTransport;
     }
     return cnt * fee;
   }, [getLog, getLessonFee]);
@@ -253,7 +257,7 @@ export default function App() {
 
 
   // forms
-  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"", shiftType:"fixed", transportPer:"shift" };
+  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"", shiftType:"fixed", transportPer:"shift", dayShifts:{} };
   const [lForm, setLForm] = useState(blankLesson);
   const [editLesson, setEditLesson] = useState(null);
   const [showAddLesson,  setShowAddLesson]  = useState(false);
@@ -592,112 +596,127 @@ export default function App() {
               const cat=CATEGORIES[l.category];
               const lg=getLog(l.id);
               const inc=lessonIncome(l);
+              const rate=Number(l.hourlyRate)||0;
+              const dayShifts=l.dayShifts??{};
+              const transport=Number(l.transport)||0;
+
+              // 今月の出勤対象日を曜日別シフトから生成
+              const lastDay=new Date(calYear,calMonth,0).getDate();
+              const workDays=[];
+              for(let d=1;d<=lastDay;d++){
+                const dow=new Date(calYear,calMonth-1,d).getDay();
+                const si=dow===0?6:dow-1;
+                const sh=dayShifts[si];
+                if(!sh||!sh.enabled||!sh.startTime||!sh.endTime) continue;
+                const ds=`${mk}-${String(d).padStart(2,"0")}`;
+                const absent=(lg.absentDates??[]).includes(ds);
+                const mins=calcFeeFromTime(sh.startTime,sh.endTime,1);
+                const wage=calcFeeFromTime(sh.startTime,sh.endTime,rate);
+                workDays.push({d,dow,si,sh,ds,absent,mins,wage});
+              }
+
+              const totalMins=workDays.filter(x=>!x.absent).reduce((s,x)=>s+x.mins,0);
+              const totalWage=workDays.filter(x=>!x.absent).reduce((s,x)=>s+x.wage+(l.transportPer==="shift"?transport:0),0)
+                +(l.transportPer==="month"?transport:0);
+
+              const toggleAbsent=(ds)=>{
+                setLogs(p=>{
+                  const cur={...getLog(l.id)};
+                  const ab=cur.absentDates??[];
+                  return{...p,[l.id]:{...cur,absentDates:ab.includes(ds)?ab.filter(x=>x!==ds):[...ab,ds]}};
+                });
+                flash();
+              };
+
               return (
                 <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+                  {/* ヘッダー */}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                     <div>
                       <div style={{fontSize:18,fontWeight:700}}>{cat.icon} {l.lessonName||l.place}</div>
-                      <div style={{fontSize:14,color:"#94a3b8"}}>{l.place} · 時給¥{(Number(l.hourlyRate)||0).toLocaleString()}</div>
-                      <div style={{fontSize:13,color:"#f97316",marginTop:2}}>{l.shiftType==="fixed"?"📅 固定シフト":"🔄 シフト制"}</div>
+                      <div style={{fontSize:13,color:"#94a3b8"}}>{l.place} · 時給¥{rate.toLocaleString()}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>今月収入</div>
+                      <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>今月収入見込み</div>
                       <div style={{fontSize:20,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
                     </div>
                   </div>
 
-                  {l.shiftType==="fixed" ? (
-                    <>
-                      <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",marginBottom:12,border:"1px solid #fed7aa"}}>
-                        <div style={{fontSize:14,color:"#64748b",marginBottom:4}}>
-                          {SCHED_DAYS[l.day]}曜 {l.startTime}〜{l.endTime}
-                          {l.startTime&&l.endTime&&<span style={{marginLeft:8,color:"#f97316",fontWeight:600}}>
-                            {Math.floor(calcFeeFromTime(l.startTime,l.endTime,1)/60)}時間{calcFeeFromTime(l.startTime,l.endTime,1)%60>0?`${calcFeeFromTime(l.startTime,l.endTime,1)%60}分`:""}
-                          </span>}
-                        </div>
-                        <div style={{fontSize:16,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
-                          1回 ¥{calcFeeFromTime(l.startTime,l.endTime,Number(l.hourlyRate)||0).toLocaleString()}
-                          {l.transportPer==="shift"&&Number(l.transport)>0&&<span style={{fontSize:13,color:"#10b981",marginLeft:6}}>+交通費¥{Number(l.transport).toLocaleString()}</span>}
-                        </div>
-                      </div>
-                      <div style={{fontSize:15,color:"#64748b",marginBottom:10,fontWeight:600}}>今月の出勤回数</div>
-                      <div style={{display:"flex",alignItems:"center",gap:16,background:"#f8fafc",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:Math.max(0,(cur.count??0)-1)}};});flash();}} style={cBtn}>－</button>
-                        <div style={{textAlign:"center",flex:1}}>
-                          <div style={{fontSize:36,fontWeight:700,fontFamily:"'DM Mono',monospace",color:cat.color}}>{lg.count??0}</div>
-                          <div style={{fontSize:13,color:"#94a3b8"}}>回出勤</div>
-                        </div>
-                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:(cur.count??0)+1}};});flash();}} style={cBtn}>＋</button>
-                      </div>
-                      <div style={{background:"#fff7ed",borderRadius:10,padding:"10px 14px",border:"1px solid #fed7aa"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={{fontSize:14,color:"#64748b"}}>合計勤務時間</span>
-                          <span style={{fontSize:15,fontWeight:700,color:"#f97316"}}>
-                            {Math.floor(calcFeeFromTime(l.startTime,l.endTime,1)/60*(lg.count??0))}時間
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {(lg.shifts??[]).map((sh,si)=>(
-                        <div key={si} style={{background:"#f8fafc",borderRadius:12,padding:"14px",marginBottom:10,border:"1px solid #e2e8f0"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                            <div style={{fontSize:15,fontWeight:700,color:"#1e293b"}}>シフト {si+1}</div>
-                            <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=(cur.shifts??[]).filter((_,i)=>i!==si);return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:13,cursor:"pointer",...F}}>削除</button>
+                  {/* 曜日別シフト一覧 */}
+                  <div style={{background:"#fff7ed",borderRadius:10,padding:"10px 12px",marginBottom:12,border:"1px solid #fed7aa"}}>
+                    <div style={{fontSize:12,color:"#f97316",fontWeight:700,marginBottom:6}}>登録シフト</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {["月","火","水","木","金","土","日"].map((d,i)=>{
+                        const sh=dayShifts[i];
+                        if(!sh||!sh.enabled) return null;
+                        const mins=calcFeeFromTime(sh.startTime,sh.endTime,1);
+                        return (
+                          <div key={i} style={{background:"white",borderRadius:8,padding:"4px 10px",border:"1px solid #fed7aa",fontSize:12}}>
+                            <span style={{fontWeight:700,color:"#f97316"}}>{d}</span>
+                            <span style={{color:"#64748b",marginLeft:4}}>{sh.startTime}〜{sh.endTime}</span>
+                            <span style={{color:"#f97316",marginLeft:4,fontWeight:600}}>{Math.floor(mins/60)}h{mins%60>0?`${mins%60}m`:""}</span>
                           </div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
-                            <div>
-                              <div style={{fontSize:13,color:"#94a3b8",marginBottom:6}}>開始時間</div>
-                              <select value={sh.startTime||""} onChange={e=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],startTime:e.target.value};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}}
-                                style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #e2e8f0",background:"white",fontSize:14,...F}}>
-                                <option value="">--</option>
-                                {Array.from({length:(22-8)*2+1},(_,i)=>{const h=8+Math.floor(i/2),m=i%2===0?0:30;return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <div style={{fontSize:13,color:"#94a3b8",marginBottom:6}}>終了時間</div>
-                              <select value={sh.endTime||""} onChange={e=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],endTime:e.target.value};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}}
-                                style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #e2e8f0",background:"white",fontSize:14,...F}}>
-                                <option value="">--</option>
-                                {Array.from({length:(22-8)*2+1},(_,i)=>{const h=8+Math.floor(i/2),m=i%2===0?0:30;return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </div>
-                          </div>
-                          {sh.startTime&&sh.endTime&&(
-                            <div style={{background:"#fff7ed",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between"}}>
-                              <span style={{fontSize:13,color:"#64748b"}}>
-                                {sh.startTime}〜{sh.endTime} · {Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}時間{calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}分`:""}
-                              </span>
-                              <span style={{fontSize:14,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
-                                ¥{(calcFeeFromTime(sh.startTime,sh.endTime,Number(l.hourlyRate)||0)+(l.transportPer==="shift"?Number(l.transport||0):0)).toLocaleString()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[]),{startTime:"",endTime:""}];return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}}
-                        style={{width:"100%",padding:"14px",borderRadius:12,border:"1px dashed #f97316",background:"#fff7ed",color:"#f97316",fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:10,...F}}>
-                        ＋ シフトを追加
-                      </button>
-                      {(lg.shifts??[]).length>0&&(
-                        <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",border:"1px solid #fed7aa"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                            <span style={{fontSize:14,color:"#64748b"}}>合計勤務時間</span>
-                            <span style={{fontSize:15,fontWeight:700,color:"#f97316"}}>
-                              {(()=>{const mins=(lg.shifts??[]).reduce((s,sh)=>s+calcFeeFromTime(sh.startTime,sh.endTime,1),0);return `${Math.floor(mins/60)}時間${mins%60>0?`${mins%60}分`:""}`;})()}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {l.transportPer==="month"&&Number(l.transport)>0&&(
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f0fdf4",borderRadius:10,padding:"12px 14px",marginTop:10,border:"1px solid #bbf7d0"}}>
-                      <span style={{fontSize:15,color:"#10b981",fontWeight:700}}>🚗 交通費（月まとめ支給）</span>
-                      <span style={{fontSize:16,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>+¥{Number(l.transport).toLocaleString()}</span>
+                        );
+                      })}
                     </div>
+                  </div>
+
+                  {/* 今月の日付リスト */}
+                  {workDays.length===0?(
+                    <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"16px 0"}}>シフトが登録されていません</div>
+                  ):(
+                    <>
+                      <div style={{fontSize:13,color:"#64748b",fontWeight:700,marginBottom:8}}>今月の出勤日　<span style={{fontSize:11,fontWeight:400}}>タップで欠勤切り替え</span></div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
+                        {workDays.map(({d,dow,si,sh,ds,absent,mins,wage})=>{
+                          const dayLabel=["日","月","火","水","木","金","土"][dow];
+                          return (
+                            <div key={ds} onClick={()=>toggleAbsent(ds)}
+                              style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:absent?"#f8fafc":"#fff7ed",border:absent?"1px solid #e2e8f0":"1px solid #fed7aa",cursor:"pointer",opacity:absent?0.5:1}}>
+                              <div style={{width:40,height:40,borderRadius:10,background:absent?"#e2e8f0":cat.color,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                <span style={{fontSize:13,fontWeight:700,color:"white"}}>{d}</span>
+                                <span style={{fontSize:10,color:absent?"#94a3b8":"#ffffff99"}}>{dayLabel}</span>
+                              </div>
+                              <div style={{flex:1}}>
+                                <div style={{fontSize:13,color:absent?"#94a3b8":"#1e293b"}}>{sh.startTime}〜{sh.endTime}</div>
+                                <div style={{fontSize:11,color:"#94a3b8"}}>{Math.floor(mins/60)}時間{mins%60>0?`${mins%60}分`:""}</div>
+                              </div>
+                              <div style={{textAlign:"right"}}>
+                                {absent?(
+                                  <span style={{fontSize:12,color:"#ef4444",fontWeight:700}}>欠勤</span>
+                                ):(
+                                  <span style={{fontSize:14,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
+                                    ¥{(wage+(l.transportPer==="shift"?transport:0)).toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* 合計 */}
+                      <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",border:"1px solid #fed7aa"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                          <span style={{fontSize:13,color:"#64748b"}}>出勤日数</span>
+                          <span style={{fontSize:14,fontWeight:700,color:"#f97316"}}>{workDays.filter(x=>!x.absent).length}日 / {workDays.length}日</span>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                          <span style={{fontSize:13,color:"#64748b"}}>合計勤務時間</span>
+                          <span style={{fontSize:14,fontWeight:700,color:"#f97316"}}>{Math.floor(totalMins/60)}時間{totalMins%60>0?`${totalMins%60}分`:""}</span>
+                        </div>
+                        {l.transportPer==="month"&&transport>0&&(
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                            <span style={{fontSize:13,color:"#10b981"}}>🚗 交通費（月まとめ）</span>
+                            <span style={{fontSize:14,fontWeight:700,color:"#10b981"}}>+¥{transport.toLocaleString()}</span>
+                          </div>
+                        )}
+                        <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:"1px solid #fed7aa"}}>
+                          <span style={{fontSize:14,fontWeight:700,color:"#64748b"}}>今月合計</span>
+                          <span style={{fontSize:18,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{totalWage.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               );
@@ -964,16 +983,36 @@ export default function App() {
           {lForm.category==="circle"&&<><Label>1人あたりの単価（円）</Label><LInput type="number" value={lForm.unitPrice} onChange={v=>setLForm(f=>({...f,unitPrice:v}))} placeholder="例：1500"/><Label>デフォルト人数</Label><LInput type="number" value={lForm.defaultPeople} onChange={v=>setLForm(f=>({...f,defaultPeople:v}))} placeholder="例：10"/></>}
           {lForm.category==="part"&&(
             <>
-              <Label>シフトタイプ</Label>
-              <div style={{display:"flex",gap:8,marginBottom:16}}>
-                {[["fixed","📅 固定シフト"],["shift","🔄 シフト制"]].map(([val,label])=>(
-                  <button key={val} onClick={()=>setLForm(f=>({...f,shiftType:val}))}
-                    style={{flex:1,padding:"10px 8px",borderRadius:10,border:lForm.shiftType===val?"2px solid #f97316":"2px solid #e2e8f0",background:lForm.shiftType===val?"#fff7ed":"white",color:lForm.shiftType===val?"#f97316":"#64748b",fontSize:14,cursor:"pointer",fontWeight:lForm.shiftType===val?700:400,...F}}>
-                    {label}
-                  </button>
-                ))}
+              <Label>時給（円）</Label>
+              <LInput type="number" value={lForm.hourlyRate} onChange={v=>setLForm(f=>({...f,hourlyRate:v}))} placeholder="例：1050"/>
+              <Label>曜日別シフト時間</Label>
+              <div style={{marginBottom:14}}>
+                {["月","火","水","木","金","土","日"].map((d,i)=>{
+                  const sh = lForm.dayShifts?.[i] ?? {enabled:false,startTime:"09:00",endTime:"13:00"};
+                  return (
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"10px 12px",borderRadius:10,background:sh.enabled?"#fff7ed":"#f8fafc",border:sh.enabled?"1px solid #fed7aa":"1px solid #e2e8f0"}}>
+                      <button onClick={()=>setLForm(f=>({...f,dayShifts:{...(f.dayShifts??{}),[i]:{...(f.dayShifts?.[i]??{startTime:"09:00",endTime:"13:00"}),enabled:!sh.enabled}}}))}
+                        style={{width:36,height:36,borderRadius:8,border:"none",background:sh.enabled?"#f97316":"#e2e8f0",color:"white",fontWeight:700,fontSize:13,cursor:"pointer",...F}}>{d}</button>
+                      {sh.enabled&&(
+                        <>
+                          <select value={sh.startTime||"09:00"} onChange={e=>setLForm(f=>({...f,dayShifts:{...(f.dayShifts??{}),[i]:{...sh,startTime:e.target.value}}}))}
+                            style={{flex:1,padding:"6px 8px",borderRadius:8,border:"1px solid #fed7aa",background:"white",fontSize:14,...F}}>
+                            {Array.from({length:(22-6)*4+1},(_,j)=>{const hh=6+Math.floor(j/4),mm=(j%4)*15;return `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <span style={{color:"#94a3b8",fontSize:13}}>〜</span>
+                          <select value={sh.endTime||"13:00"} onChange={e=>setLForm(f=>({...f,dayShifts:{...(f.dayShifts??{}),[i]:{...sh,endTime:e.target.value}}}))}
+                            style={{flex:1,padding:"6px 8px",borderRadius:8,border:"1px solid #fed7aa",background:"white",fontSize:14,...F}}>
+                            {Array.from({length:(22-6)*4+1},(_,j)=>{const hh=6+Math.floor(j/4),mm=(j%4)*15;return `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <span style={{fontSize:12,color:"#f97316",fontWeight:700,minWidth:36,textAlign:"right"}}>
+                            {calcFeeFromTime(sh.startTime,sh.endTime,1)>0?`${Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}h${calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}m`:""}` :""}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <Label>時給（円）</Label><LInput type="number" value={lForm.hourlyRate} onChange={v=>setLForm(f=>({...f,hourlyRate:v}))} placeholder="例：1200"/>
             </>
           )}
 
