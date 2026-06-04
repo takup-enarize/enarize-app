@@ -108,7 +108,7 @@ export default function App() {
   const [allExpenses, setAllExpenses] = useState(() => load("en3_expenses", {}));
   const [allSpots,    setAllSpots]    = useState(() => load("en3_spots",    {}));
   const [allSubs,     setAllSubs]     = useState(() => load("en3_subs",     {}));
-  const [subSettings, setSubSettingsRaw] = useState(() => load("en3_sub_settings", { normalPrice:1500, vipPrice:1000, normalCount:0, vipCount:0 }));
+  const [subSettings, setSubSettingsRaw] = useState(() => load("en3_sub_settings", { serviceName:"ENARIZE MEMBERS", normalPrice:1500, vipPrice:1000, normalCount:0, vipCount:0 }));
 
   const [merch,       setMerchRaw]    = useState(() => load("en3_merch",    []));
   const [allMerchLogs,setAllMerchLogs]= useState(() => load("en3_merch_logs", {}));
@@ -409,7 +409,7 @@ export default function App() {
               if(!inc) return null;
               return <div key={key} style={{background:cat.color+"12",borderRadius:8,padding:"5px 10px",border:`1px solid ${cat.color}25`}}><span style={{fontSize:13,color:cat.color,fontWeight:700}}>{cat.icon} {cat.label}</span><span style={{fontSize:13,fontFamily:"'DM Mono',monospace",color:cat.color,marginLeft:6}}>¥{inc.toLocaleString()}</span></div>;
             })}
-            {subIncome>0&&<div style={{background:"#10b98112",borderRadius:8,padding:"5px 10px",border:"1px solid #10b98125"}}><span style={{fontSize:10,color:"#10b981",fontWeight:700}}>📱 サブスク</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#10b981",marginLeft:6}}>¥{subIncome.toLocaleString()}</span></div>}
+            {subIncome>0&&<div style={{background:"#10b98112",borderRadius:8,padding:"5px 10px",border:"1px solid #10b98125"}}><span style={{fontSize:10,color:"#10b981",fontWeight:700}}>📱 {subSettings.serviceName||"サブスク"}</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#10b981",marginLeft:6}}>¥{subIncome.toLocaleString()}</span></div>}
             {merchIncome>0&&<div style={{background:"#ec489912",borderRadius:8,padding:"5px 10px",border:"1px solid #ec489925"}}><span style={{fontSize:13,color:"#ec4899",fontWeight:700}}>🛍️ 物販</span><span style={{fontSize:13,fontFamily:"'DM Mono',monospace",color:"#ec4899",marginLeft:6}}>¥{merchIncome.toLocaleString()}</span></div>}
           </div>
         </div>
@@ -595,8 +595,19 @@ export default function App() {
 
             <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:"1px solid #10b98120"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div><div style={{fontSize:14,fontWeight:700}}>📱 ENARIZE MEMBERS</div><div style={{fontSize:11,color:"#94a3b8"}}>通常¥{(subSettings.normalPrice??1500).toLocaleString()} / お得意様¥{(subSettings.vipPrice??1000).toLocaleString()}</div></div>
+                <div><div style={{fontSize:14,fontWeight:700}}>📱 {subSettings.serviceName||"ENARIZE MEMBERS"}</div><div style={{fontSize:11,color:"#94a3b8"}}>通常¥{(subSettings.normalPrice??1500).toLocaleString()} / 👑¥{(subSettings.vipPrice??1000).toLocaleString()}</div></div>
                 <div style={{fontSize:18,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>¥{subIncome.toLocaleString()}</div>
+              </div>
+              {/* サービス名 */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:12,color:"#10b981",fontWeight:700,marginBottom:6}}>サービス名</div>
+                <input
+                  type="text"
+                  value={subSettings.serviceName||""}
+                  onChange={e=>setSubSettings(s=>({...s,serviceName:e.target.value}))}
+                  placeholder="例：ENARIZE MEMBERS"
+                  style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
+                />
               </div>
               {/* 単価設定 */}
               <div style={{display:"flex",gap:8,marginBottom:12}}>
