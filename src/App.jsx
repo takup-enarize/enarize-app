@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 
 const MONTHS_JP = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 const WEEK_DAYS = ["日","月","火","水","木","金","土"];
@@ -1254,6 +1254,21 @@ function TimePicker({value, onChange, label, compact=false}) {
   const [h, setH] = useState(() => value ? parseInt(value.split(":")[0]) : 10);
   const [m, setM] = useState(() => value ? parseInt(value.split(":")[1]) : 0);
   const [enabled, setEnabled] = useState(!!value);
+  const prevValue = useRef(value);
+
+  // 編集モードで外から value が変わったとき（レッスン編集を開いた瞬間）に同期
+  useEffect(() => {
+    if (value !== prevValue.current) {
+      prevValue.current = value;
+      if (value) {
+        setH(parseInt(value.split(":")[0]));
+        setM(parseInt(value.split(":")[1]));
+        setEnabled(true);
+      } else {
+        setEnabled(false);
+      }
+    }
+  }, [value]);
 
   useEffect(() => {
     if (enabled) {
