@@ -108,7 +108,7 @@ export default function App() {
   const [allExpenses, setAllExpenses] = useState(() => load("en3_expenses", {}));
   const [allSpots,    setAllSpots]    = useState(() => load("en3_spots",    {}));
   const [allSubs,     setAllSubs]     = useState(() => load("en3_subs",     {}));
-  const [subMembers,  setSubMembersRaw] = useState(() => load("en3_sub", 0));
+  const [subSettings, setSubSettingsRaw] = useState(() => load("en3_sub_settings", { normalPrice:1500, vipPrice:1000, normalCount:0, vipCount:0 }));
 
   const [merch,       setMerchRaw]    = useState(() => load("en3_merch",    []));
   const [allMerchLogs,setAllMerchLogs]= useState(() => load("en3_merch_logs", {}));
@@ -127,7 +127,7 @@ export default function App() {
   const setSubs      = useCallback(fn => setAllSubs(p      => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_subs",n); return n; }), [mk]);
   const setMerchLogs = useCallback(fn => setAllMerchLogs(p => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_merch_logs",n); return n; }), [mk]);
   const setMerch     = (v) => { setMerchRaw(v); save("en3_merch", v); };
-  const setSubMembers = v => { setSubMembersRaw(v); save("en3_sub", v); };
+  const setSubSettings = v => { const next = typeof v === "function" ? v(subSettings) : v; setSubSettingsRaw(next); save("en3_sub_settings", next); };
 
   useEffect(() => { save("en3_lessons",   lessons);   }, [lessons]);
   useEffect(() => { save("en3_paygroups", payGroups); }, [payGroups]);
@@ -199,7 +199,7 @@ export default function App() {
 
   const subsIncome   = subs.reduce((s,e) => s + (e.fee ?? 0), 0);
   const totalLessonIncome = useMemo(() => lessons.reduce((s,l) => s + lessonIncome(l), 0), [lessons, logs]);
-  const subIncome    = subMembers * 1000;
+  const subIncome    = (subSettings.normalCount ?? 0) * (subSettings.normalPrice ?? 1500) + (subSettings.vipCount ?? 0) * (subSettings.vipPrice ?? 1000);
   const spotIncome   = spots.reduce((s,e) => s + e.amount, 0);
   const totalIncome  = totalLessonIncome + subIncome + spotIncome + subsIncome + merchIncome;
   const totalExpenses= expenses.reduce((s,e) => s + Number(e.amount), 0);
@@ -595,15 +595,45 @@ export default function App() {
 
             <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:"1px solid #10b98120"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div><div style={{fontSize:14,fontWeight:700}}>📱 ENARIZE MEMBERS</div><div style={{fontSize:11,color:"#94a3b8"}}>サブスク · ¥1,000/月</div></div>
+                <div><div style={{fontSize:14,fontWeight:700}}>📱 ENARIZE MEMBERS</div><div style={{fontSize:11,color:"#94a3b8"}}>通常¥{(subSettings.normalPrice??1500).toLocaleString()} / お得意様¥{(subSettings.vipPrice??1000).toLocaleString()}</div></div>
                 <div style={{fontSize:18,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>¥{subIncome.toLocaleString()}</div>
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:12,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
-                <span style={{fontSize:12,color:"#94a3b8"}}>今月の請求人数</span>
-                <button onClick={()=>setSubMembers(Math.max(0,subMembers-1))} style={cBtn}>－</button>
-                <span style={{fontSize:22,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#10b981"}}>{subMembers}</span>
-                <button onClick={()=>setSubMembers(subMembers+1)} style={cBtn}>＋</button>
+              {/* 単価設定 */}
+              <div style={{display:"flex",gap:8,marginBottom:12}}>
+                <div style={{flex:1,background:"#f0fdf4",borderRadius:10,padding:"10px 12px",border:"1px solid #bbf7d0"}}>
+                  <div style={{fontSize:11,color:"#10b981",fontWeight:700,marginBottom:6}}>通常単価</div>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{fontSize:12,color:"#64748b"}}>¥</span>
+                    <input type="number" value={subSettings.normalPrice??1500} onChange={e=>setSubSettings(s=>({...s,normalPrice:Number(e.target.value)||0}))}
+                      style={{width:"100%",padding:"6px 8px",borderRadius:8,border:"1px solid #bbf7d0",fontSize:16,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace",textAlign:"right",...F}}/>
+                  </div>
+                </div>
+                <div style={{flex:1,background:"#fdf4ff",borderRadius:10,padding:"10px 12px",border:"1px solid #e9d5ff"}}>
+                  <div style={{fontSize:11,color:"#a855f7",fontWeight:700,marginBottom:6}}>👑 お得意様単価</div>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{fontSize:12,color:"#64748b"}}>¥</span>
+                    <input type="number" value={subSettings.vipPrice??1000} onChange={e=>setSubSettings(s=>({...s,vipPrice:Number(e.target.value)||0}))}
+                      style={{width:"100%",padding:"6px 8px",borderRadius:8,border:"1px solid #e9d5ff",fontSize:16,fontWeight:700,color:"#a855f7",fontFamily:"'DM Mono',monospace",textAlign:"right",...F}}/>
+                  </div>
+                </div>
+              </div>
+              {/* 通常人数 */}
+              <div style={{display:"flex",alignItems:"center",gap:12,background:"#f0fdf4",borderRadius:10,padding:"10px 12px",marginBottom:8,border:"1px solid #bbf7d0"}}>
+                <span style={{fontSize:12,color:"#10b981",fontWeight:700,minWidth:60}}>通常</span>
+                <button onClick={()=>setSubSettings(s=>({...s,normalCount:Math.max(0,(s.normalCount??0)-1)}))} style={cBtn}>－</button>
+                <span style={{fontSize:22,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#10b981"}}>{subSettings.normalCount??0}</span>
+                <button onClick={()=>setSubSettings(s=>({...s,normalCount:(s.normalCount??0)+1}))} style={cBtn}>＋</button>
                 <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
+                <span style={{marginLeft:"auto",fontSize:14,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>¥{((subSettings.normalCount??0)*(subSettings.normalPrice??1500)).toLocaleString()}</span>
+              </div>
+              {/* お得意様人数 */}
+              <div style={{display:"flex",alignItems:"center",gap:12,background:"#fdf4ff",borderRadius:10,padding:"10px 12px",border:"1px solid #e9d5ff"}}>
+                <span style={{fontSize:12,color:"#a855f7",fontWeight:700,minWidth:60}}>👑 お得意様</span>
+                <button onClick={()=>setSubSettings(s=>({...s,vipCount:Math.max(0,(s.vipCount??0)-1)}))} style={cBtn}>－</button>
+                <span style={{fontSize:22,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#a855f7"}}>{subSettings.vipCount??0}</span>
+                <button onClick={()=>setSubSettings(s=>({...s,vipCount:(s.vipCount??0)+1}))} style={cBtn}>＋</button>
+                <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
+                <span style={{marginLeft:"auto",fontSize:14,fontWeight:700,color:"#a855f7",fontFamily:"'DM Mono',monospace"}}>¥{((subSettings.vipCount??0)*(subSettings.vipPrice??1000)).toLocaleString()}</span>
               </div>
             </div>
           </div>
