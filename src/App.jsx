@@ -333,21 +333,6 @@ export default function App() {
     });
   }, [merch, merchLogs]);
 
-  // 明日のレッスン（当月表示中かつ翌日が同月内の場合のみ）
-  const tomorrowLessons = useMemo(() => {
-    const tmr = new Date(today); tmr.setDate(today.getDate() + 1);
-    const tmrYear = tmr.getFullYear(), tmrMonth = tmr.getMonth()+1, tmrDay = tmr.getDate();
-    if (tmrYear !== calYear || tmrMonth !== calMonth) return [];
-    const dow = tmr.getDay();
-    const si  = dow === 0 ? 6 : dow - 1;
-    return lessons.filter(l =>
-      l.day === si &&
-      getLog(l.id).active &&
-      !isRestDay(l, tmrDay) &&
-      !isSkipped(l.id, tmrDay)
-    );
-  }, [calYear, calMonth, lessons, logs]);
-
   const prevMonth = () => { if(calMonth===1){setCalYear(y=>y-1);setCalMonth(12);}else setCalMonth(m=>m-1); setSelDay(null); };
   const nextMonth = () => { if(calMonth===12){setCalYear(y=>y+1);setCalMonth(1);}else setCalMonth(m=>m+1); setSelDay(null); };
 
@@ -397,47 +382,6 @@ export default function App() {
           </div>
         </div>
 
-
-
-        {/* 明日のレッスン ticker */}
-        {tomorrowLessons.length>0&&(
-          <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",borderRadius:12,padding:"10px 14px",marginBottom:14,overflow:"hidden",position:"relative",display:"flex",alignItems:"center",gap:10,boxShadow:"0 2px 10px #00000020"}}>
-            <style>{`@keyframes ticker{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
-            <div style={{flexShrink:0,fontSize:11,fontWeight:700,color:"#f59e0b",background:"#f59e0b20",border:"1px solid #f59e0b50",borderRadius:6,padding:"2px 8px",letterSpacing:1}}>明日</div>
-            <div style={{overflow:"hidden",flex:1}}>
-              <div style={{display:"inline-block",whiteSpace:"nowrap",animation:"ticker 18s linear infinite",fontSize:13,color:"white",fontWeight:500}}>
-                {tomorrowLessons.map((l,i)=>{
-                  const cat=CATEGORIES[l.category];
-                  const fee=getLessonFee(l);
-                  return (
-                    <span key={l.id}>
-                      {i>0&&<span style={{color:"#475569",margin:"0 16px"}}>｜</span>}
-                      <span style={{color:cat.color}}>{cat.icon}</span>
-                      <span style={{marginLeft:5}}>{l.lessonName||l.place}</span>
-                      {l.startTime&&<span style={{color:"#94a3b8",marginLeft:6,fontFamily:"'DM Mono',monospace"}}>{l.startTime}〜{l.endTime}</span>}
-                      <span style={{color:"#f59e0b",marginLeft:8,fontFamily:"'DM Mono',monospace",fontWeight:700}}>¥{fee.toLocaleString()}</span>
-                    </span>
-                  );
-                })}
-                {/* 2周目（途切れないよう） */}
-                <span style={{marginLeft:40}}/>
-                {tomorrowLessons.map((l,i)=>{
-                  const cat=CATEGORIES[l.category];
-                  const fee=getLessonFee(l);
-                  return (
-                    <span key={`r${l.id}`}>
-                      {i>0&&<span style={{color:"#475569",margin:"0 16px"}}>｜</span>}
-                      <span style={{color:cat.color}}>{cat.icon}</span>
-                      <span style={{marginLeft:5}}>{l.lessonName||l.place}</span>
-                      {l.startTime&&<span style={{color:"#94a3b8",marginLeft:6,fontFamily:"'DM Mono',monospace"}}>{l.startTime}〜{l.endTime}</span>}
-                      <span style={{color:"#f59e0b",marginLeft:8,fontFamily:"'DM Mono',monospace",fontWeight:700}}>¥{fee.toLocaleString()}</span>
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
         {/* ══ CALENDAR ══ */}
         {tab==="calendar"&&(
           <div>
