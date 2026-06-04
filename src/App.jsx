@@ -962,14 +962,14 @@ export default function App() {
           </div>
           <Label>金額（円）</Label><LInput type="number" value={expForm.amount} onChange={v=>setExpForm(f=>({...f,amount:v}))} placeholder="例：500"/>
           <Label>日付</Label><LInput type="date" value={expForm.date} onChange={v=>setExpForm(f=>({...f,date:v}))}/>
-          <Label>メモ（任意）</Label><LInput value={expForm.note} onChange={v=>setExpForm(f=>({...f,note:v}))} placeholder="例：菊陽体育館まで"/>
+          <Label>メモ（任意）</Label><LInput value={expForm.note} onChange={v=>setExpForm(f=>({...f,note:v}))} placeholder="例：○○体育館まで"/>
           <button onClick={saveExpense} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"#10b981",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>追加する</button>
         </Modal>
       )}
 
       {showAddPayGroup&&(
         <Modal onClose={()=>setShowAddPayGroup(false)} title="💴 給料グループを追加" color="#f59e0b">
-          <Label>グループ名</Label><LInput value={pgForm.name} onChange={v=>setPgForm(f=>({...f,name:v}))} placeholder="例：ジムA・施設B"/>
+          <Label>グループ名</Label><LInput value={pgForm.name} onChange={v=>setPgForm(f=>({...f,name:v}))} placeholder="例：スポーツクラブA・市民体育館"/>
           <Label>給料日（0=月末）</Label><LInput type="number" value={pgForm.payDay} onChange={v=>setPgForm(f=>({...f,payDay:v}))} placeholder="例：25"/>
           <Label>対象レッスン（複数選択可）</Label>
           <div style={{maxHeight:200,overflowY:"auto",marginBottom:14}}>
@@ -991,7 +991,7 @@ export default function App() {
       {showAddMerch&&(
         <Modal onClose={()=>{setShowAddMerch(false);setEditMerch(null);setMForm(blankMerch);}} title={editMerch?"✏️ 商品を編集":"🛍️ 商品を追加"} color="#ec4899">
           <Label>商品名</Label>
-          <LInput value={mForm.name} onChange={v=>setMForm(f=>({...f,name:v}))} placeholder="例：ENARIZEオリジナルTシャツ"/>
+          <LInput value={mForm.name} onChange={v=>setMForm(f=>({...f,name:v}))} placeholder="例：オリジナルTシャツ（黒）"/>
           <Label>通常価格（円）</Label>
           <LInput type="number" value={mForm.price} onChange={v=>setMForm(f=>({...f,price:v}))} placeholder="例：4500"/>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
@@ -1013,7 +1013,7 @@ export default function App() {
             </>
           )}
           <Label>メモ（任意）</Label>
-          <LInput value={mForm.note} onChange={v=>setMForm(f=>({...f,note:v}))} placeholder="例：7.1oz ヘビーウェイト"/>
+          <LInput value={mForm.note} onChange={v=>setMForm(f=>({...f,note:v}))} placeholder="例：カラー・サイズ展開など"/>
           <button onClick={saveMerch} style={{width:"100%",padding:16,borderRadius:12,border:"none",background:"linear-gradient(135deg,#ec4899,#f97316)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",...F}}>
             {editMerch?"更新する":"追加する"}
           </button>
