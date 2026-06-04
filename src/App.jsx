@@ -364,7 +364,7 @@ export default function App() {
           {badge&&<div style={{fontSize:10,color:"white",background:"#ffffff30",padding:"3px 10px",borderRadius:20}}>✓ 保存済み</div>}
         </div>
         <div style={{display:"flex",overflowX:"auto"}}>
-          {[["calendar","📅"],["input","📝"],["expenses","💸"],["lessons","⚙️"],["merch","🛍️"],["analysis","📊"]].map(([key,icon])=>(
+          {[["calendar","📅"],["input","📝"],["parttime","💼"],["expenses","💸"],["lessons","⚙️"],["merch","🛍️"],["analysis","📊"]].map(([key,icon])=>(
             <button key={key} onClick={()=>setTab(key)}
               style={{flexShrink:0,flex:1,padding:"9px 8px",background:"none",border:"none",borderBottom:tab===key?"2px solid white":"2px solid transparent",color:tab===key?"white":"#ffffff80",fontWeight:700,fontSize:22,cursor:"pointer"}}>
               {icon}
@@ -631,6 +631,133 @@ export default function App() {
                 <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ══ PART TIME ══ */}
+        {tab==="parttime"&&(
+          <div>
+            <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>💼 アルバイト シフト管理</div>
+            {lessons.filter(l=>l.category==="part").length===0&&(
+              <div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:15}}>
+                <div style={{fontSize:40,marginBottom:8}}>💼</div>
+                ⚙️ レッスン管理からアルバイトを追加してね
+              </div>
+            )}
+            {lessons.filter(l=>l.category==="part").map(l=>{
+              const cat=CATEGORIES[l.category];
+              const lg=getLog(l.id);
+              const inc=lessonIncome(l);
+              return (
+                <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                    <div>
+                      <div style={{fontSize:18,fontWeight:700}}>{cat.icon} {l.lessonName||l.place}</div>
+                      <div style={{fontSize:14,color:"#94a3b8"}}>{l.place} · 時給¥{(Number(l.hourlyRate)||0).toLocaleString()}</div>
+                      <div style={{fontSize:13,color:"#f97316",marginTop:2}}>{l.shiftType==="fixed"?"📅 固定シフト":"🔄 シフト制"}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>今月収入</div>
+                      <div style={{fontSize:20,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
+                    </div>
+                  </div>
+
+                  {l.shiftType==="fixed" ? (
+                    <>
+                      <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",marginBottom:12,border:"1px solid #fed7aa"}}>
+                        <div style={{fontSize:14,color:"#64748b",marginBottom:4}}>
+                          {SCHED_DAYS[l.day]}曜 {l.startTime}〜{l.endTime}
+                          {l.startTime&&l.endTime&&<span style={{marginLeft:8,color:"#f97316",fontWeight:600}}>
+                            {Math.floor(calcFeeFromTime(l.startTime,l.endTime,1)/60)}時間{calcFeeFromTime(l.startTime,l.endTime,1)%60>0?`${calcFeeFromTime(l.startTime,l.endTime,1)%60}分`:""}
+                          </span>}
+                        </div>
+                        <div style={{fontSize:16,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
+                          1回 ¥{calcFeeFromTime(l.startTime,l.endTime,Number(l.hourlyRate)||0).toLocaleString()}
+                          {l.transportPer==="shift"&&Number(l.transport)>0&&<span style={{fontSize:13,color:"#10b981",marginLeft:6}}>+交通費¥{Number(l.transport).toLocaleString()}</span>}
+                        </div>
+                      </div>
+                      <div style={{fontSize:15,color:"#64748b",marginBottom:10,fontWeight:600}}>今月の出勤回数</div>
+                      <div style={{display:"flex",alignItems:"center",gap:16,background:"#f8fafc",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:Math.max(0,(cur.count??0)-1)}};});flash();}} style={cBtn}>－</button>
+                        <div style={{textAlign:"center",flex:1}}>
+                          <div style={{fontSize:36,fontWeight:700,fontFamily:"'DM Mono',monospace",color:cat.color}}>{lg.count??0}</div>
+                          <div style={{fontSize:13,color:"#94a3b8"}}>回出勤</div>
+                        </div>
+                        <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:(cur.count??0)+1}};});flash();}} style={cBtn}>＋</button>
+                      </div>
+                      <div style={{background:"#fff7ed",borderRadius:10,padding:"10px 14px",border:"1px solid #fed7aa"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:14,color:"#64748b"}}>合計勤務時間</span>
+                          <span style={{fontSize:15,fontWeight:700,color:"#f97316"}}>
+                            {Math.floor(calcFeeFromTime(l.startTime,l.endTime,1)/60*(lg.count??0))}時間
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {(lg.shifts??[]).map((sh,si)=>(
+                        <div key={si} style={{background:"#f8fafc",borderRadius:12,padding:"14px",marginBottom:10,border:"1px solid #e2e8f0"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                            <div style={{fontSize:15,fontWeight:700,color:"#1e293b"}}>シフト {si+1}</div>
+                            <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=(cur.shifts??[]).filter((_,i)=>i!==si);return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:13,cursor:"pointer",...F}}>削除</button>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
+                            <div>
+                              <div style={{fontSize:13,color:"#94a3b8",marginBottom:6}}>開始時間</div>
+                              <select value={sh.startTime||""} onChange={e=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],startTime:e.target.value};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}}
+                                style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #e2e8f0",background:"white",fontSize:14,...F}}>
+                                <option value="">--</option>
+                                {Array.from({length:(22-8)*2+1},(_,i)=>{const h=8+Math.floor(i/2),m=i%2===0?0:30;return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <div style={{fontSize:13,color:"#94a3b8",marginBottom:6}}>終了時間</div>
+                              <select value={sh.endTime||""} onChange={e=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[])];sh2[si]={...sh2[si],endTime:e.target.value};return{...p,[l.id]:{...cur,shifts:sh2}};});flash();}}
+                                style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #e2e8f0",background:"white",fontSize:14,...F}}>
+                                <option value="">--</option>
+                                {Array.from({length:(22-8)*2+1},(_,i)=>{const h=8+Math.floor(i/2),m=i%2===0?0:30;return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          {sh.startTime&&sh.endTime&&(
+                            <div style={{background:"#fff7ed",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between"}}>
+                              <span style={{fontSize:13,color:"#64748b"}}>
+                                {sh.startTime}〜{sh.endTime} · {Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}時間{calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}分`:""}
+                              </span>
+                              <span style={{fontSize:14,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>
+                                ¥{(calcFeeFromTime(sh.startTime,sh.endTime,Number(l.hourlyRate)||0)+(l.transportPer==="shift"?Number(l.transport||0):0)).toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};const sh2=[...(cur.shifts??[]),{startTime:"",endTime:""}];return{...p,[l.id]:{...cur,shifts:sh2,count:sh2.length}};});flash();}}
+                        style={{width:"100%",padding:"14px",borderRadius:12,border:"1px dashed #f97316",background:"#fff7ed",color:"#f97316",fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:10,...F}}>
+                        ＋ シフトを追加
+                      </button>
+                      {(lg.shifts??[]).length>0&&(
+                        <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px",border:"1px solid #fed7aa"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                            <span style={{fontSize:14,color:"#64748b"}}>合計勤務時間</span>
+                            <span style={{fontSize:15,fontWeight:700,color:"#f97316"}}>
+                              {(()=>{const mins=(lg.shifts??[]).reduce((s,sh)=>s+calcFeeFromTime(sh.startTime,sh.endTime,1),0);return `${Math.floor(mins/60)}時間${mins%60>0?`${mins%60}分`:""}`;})()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {l.transportPer==="month"&&Number(l.transport)>0&&(
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f0fdf4",borderRadius:10,padding:"12px 14px",marginTop:10,border:"1px solid #bbf7d0"}}>
+                      <span style={{fontSize:15,color:"#10b981",fontWeight:700}}>🚗 交通費（月まとめ支給）</span>
+                      <span style={{fontSize:16,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>+¥{Number(l.transport).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
