@@ -271,9 +271,12 @@ export default function App() {
   const [mForm, setMForm] = useState(blankMerch);
   const [editMerch, setEditMerch] = useState(null);
   const [showAddMerch, setShowAddMerch] = useState(false);
+  const blankPart = { category:"part", lessonName:"", place:"", hourlyRate:"", transport:"", transportPer:"shift", dayShifts:{} };
   const blankSale = { merchId:"", qty:1, isMember:false, date:`${mk}-01`, note:"" };
   const [saleForm, setSaleForm] = useState(blankSale);
   const [showAddSale, setShowAddSale] = useState(false);
+  const [showAddPart, setShowAddPart] = useState(false);
+  const [editPart, setEditPart] = useState(null);
 
   const [spotForm, setSpotForm] = useState({ name:"", date:`${mk}-01`, amount:"", note:"" });
   const [expForm,  setExpForm]  = useState({ category:"交通費", amount:"", date:`${mk}-01`, note:"" });
@@ -299,6 +302,14 @@ export default function App() {
     if (!editLesson) setLogs(p => ({...p, [l.id]:{ count:defaultCount(l.freq), active:true, skipDates:[], people:l.defaultPeople, hours:1 }}));
     setEditLesson(null); setShowAddLesson(false); setLForm(blankLesson); flash();
   };
+  const savePart = () => {
+    if (!lForm.place) return;
+    const l = { ...lForm, id: editPart ?? Date.now(), category:"part", hourlyRate:Number(lForm.hourlyRate)||0 };
+    setLessons(p => editPart ? p.map(x=>x.id===editPart?l:x) : [...p,l]);
+    if (!editPart) setLogs(p => ({...p, [l.id]:{ active:true, skipDates:[], absentDates:[] }}));
+    setEditPart(null); setShowAddPart(false); setLForm(blankLesson); flash();
+  };
+  const deletePart = id => { if(window.confirm("このアルバイトを削除しますか？")) { setLessons(p=>p.filter(x=>x.id!==id)); flash(); }};
   const deleteLesson = id => { if(window.confirm("このレッスンを削除しますか？")) { setLessons(p=>p.filter(x=>x.id!==id)); flash(); }};
   const saveSpot    = () => { if(!spotForm.name||!spotForm.amount) return; setSpots(p=>[...p,{id:Date.now(),...spotForm,amount:Number(spotForm.amount)}]); setShowAddSpot(false); flash(); };
   const saveExpense = () => { if(!expForm.amount) return; setExpenses(p=>[...p,{id:Date.now(),...expForm}]); setShowAddExpense(false); flash(); };
@@ -353,7 +364,7 @@ export default function App() {
           {badge&&<div style={{fontSize:10,color:"white",background:"#ffffff30",padding:"3px 10px",borderRadius:20}}>✓ 保存済み</div>}
         </div>
         <div style={{display:"flex",overflowX:"auto"}}>
-          {[["calendar","📅"],["input","📝"],["parttime","💼"],["expenses","💸"],["lessons","⚙️"],["merch","🛍️"],["analysis","📊"]].map(([key,icon])=>(
+          {[["calendar","📅"],["input","📝"],["parttime","💼"],["expenses","💸"],["lessons","🏃"],["merch","🛍️"],["analysis","📊"]].map(([key,icon])=>(
             <button key={key} onClick={()=>setTab(key)}
               style={{flexShrink:0,flex:1,padding:"9px 8px",background:"none",border:"none",borderBottom:tab===key?"2px solid white":"2px solid transparent",color:tab===key?"white":"#ffffff80",fontWeight:700,fontSize:22,cursor:"pointer"}}>
               {icon}
@@ -585,11 +596,14 @@ export default function App() {
         {/* ══ PART TIME ══ */}
         {tab==="parttime"&&(
           <div>
-            <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>💼 アルバイト シフト管理</div>
+            <button onClick={()=>{setEditPart(null);setLForm({category:"part",lessonName:"",place:"",hourlyRate:"",transport:"",transportPer:"shift",dayShifts:{}});setShowAddPart(true);}}
+              style={{width:"100%",padding:16,borderRadius:14,border:"none",background:"linear-gradient(135deg,#f97316,#f59e0b)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",marginBottom:16,...F}}>
+              ＋ アルバイトを追加する
+            </button>
             {lessons.filter(l=>l.category==="part").length===0&&(
-              <div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:15}}>
+              <div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:15}}>
                 <div style={{fontSize:40,marginBottom:8}}>💼</div>
-                ⚙️ レッスン管理からアルバイトを追加してね
+                まだアルバイトが登録されていないよ！
               </div>
             )}
             {lessons.filter(l=>l.category==="part").map(l=>{
@@ -637,8 +651,12 @@ export default function App() {
                       <div style={{fontSize:13,color:"#94a3b8"}}>{l.place} · 時給¥{rate.toLocaleString()}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>今月収入見込み</div>
-                      <div style={{fontSize:20,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
+                      <div style={{fontSize:10,color:"#94a3b8",marginBottom:4}}>今月収入見込み</div>
+                      <div style={{fontSize:18,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace",marginBottom:6}}>¥{inc.toLocaleString()}</div>
+                      <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+                        <button onClick={()=>{setEditPart(l.id);setLForm({...l});setShowAddPart(true);}} style={{background:"#fff7ed",border:"none",borderRadius:6,padding:"4px 10px",color:"#f97316",fontSize:12,cursor:"pointer",...F}}>編集</button>
+                        <button onClick={()=>deletePart(l.id)} style={delBtn}>削除</button>
+                      </div>
                     </div>
                   </div>
 
@@ -755,7 +773,7 @@ export default function App() {
               style={{width:"100%",padding:18,borderRadius:14,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:18,cursor:"pointer",marginBottom:16,...F}}>
               ＋ レッスンを追加する
             </button>
-            {Object.entries(CATEGORIES).filter(([k])=>k!=="sub").map(([key,cat])=>{
+            {Object.entries(CATEGORIES).filter(([k])=>k!=="sub"&&k!=="part").map(([key,cat])=>{
               const ls=lessons.filter(l=>l.category===key);
               if(!ls.length) return null;
               return (
@@ -773,7 +791,6 @@ export default function App() {
                         <div style={{fontSize:12,fontWeight:700,color:cat.color,marginTop:2,fontFamily:"'DM Mono',monospace"}}>
                           {key==="regular"&&`¥${getLessonFee(l).toLocaleString()}/回`}
                           {key==="circle"&&`¥${(l.unitPrice??0).toLocaleString()}/人`}
-                          {key==="part"&&`¥${(Number(l.hourlyRate)||0).toLocaleString()}/時間`}
                           {key==="event"&&`¥${getLessonFee(l).toLocaleString()}`}
                           {l.feeMode==="calc"&&<span style={{fontSize:10,color:"#94a3b8",marginLeft:4}}>（時給計算）</span>}
                         </div>
@@ -787,7 +804,7 @@ export default function App() {
                 </div>
               );
             })}
-            {lessons.length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:13}}><div style={{fontSize:40,marginBottom:8}}>📋</div>まだレッスンが登録されていないよ！<br/>上のボタンから追加してね</div>}
+            {lessons.filter(l=>l.category!=="part").length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:13}}><div style={{fontSize:40,marginBottom:8}}>📋</div>まだレッスンが登録されていないよ！<br/>上のボタンから追加してね</div>}
 
             <div style={{height:1,background:"#e2e8f0",margin:"20px 0"}}/>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -935,7 +952,7 @@ export default function App() {
         <Modal onClose={()=>{setShowAddLesson(false);setEditLesson(null);setLForm(blankLesson);}} title={editLesson?"✏️ レッスンを編集":"➕ レッスンを追加"} color="#3b82f6">
           <Label>カテゴリ</Label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-            {Object.entries(CATEGORIES).filter(([k])=>k!=="sub").map(([key,cat])=>(
+            {Object.entries(CATEGORIES).filter(([k])=>k!=="sub"&&k!=="part").map(([key,cat])=>(
               <button key={key} onClick={()=>setLForm(f=>({...f,category:key}))}
                 style={{padding:"10px 8px",borderRadius:10,border:lForm.category===key?`2px solid ${cat.color}`:"2px solid #e2e8f0",background:lForm.category===key?cat.color+"15":"white",color:lForm.category===key?cat.color:"#64748b",fontSize:14,cursor:"pointer",textAlign:"left",...F}}>
                 <div style={{fontWeight:700}}>{cat.icon} {cat.label}</div>
@@ -1120,6 +1137,59 @@ export default function App() {
             ))}
           </div>
           <button onClick={savePayGroup} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"#f59e0b",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>追加する</button>
+        </Modal>
+      )}
+
+      {/* アルバイト登録モーダル */}
+      {showAddPart&&(
+        <Modal onClose={()=>{setShowAddPart(false);setEditPart(null);setLForm({category:"part",lessonName:"",place:"",hourlyRate:"",transport:"",transportPer:"shift",dayShifts:{}});}} title={editPart?"✏️ アルバイトを編集":"💼 アルバイトを追加"} color="#f97316">
+          <Label>職場名</Label>
+          <LInput value={lForm.place} onChange={v=>setLForm(f=>({...f,place:v}))} placeholder="例：○○スポーツクラブ"/>
+          <Label>メモ（任意）</Label>
+          <LInput value={lForm.lessonName||""} onChange={v=>setLForm(f=>({...f,lessonName:v}))} placeholder="例：フロント業務"/>
+          <Label>時給（円）</Label>
+          <LInput type="number" value={lForm.hourlyRate} onChange={v=>setLForm(f=>({...f,hourlyRate:v}))} placeholder="例：1050"/>
+          <Label>曜日別シフト時間</Label>
+          <div style={{marginBottom:14}}>
+            {["月","火","水","木","金","土","日"].map((d,i)=>{
+              const sh=lForm.dayShifts?.[i]??{enabled:false,startTime:"09:00",endTime:"13:00"};
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"10px 12px",borderRadius:10,background:sh.enabled?"#fff7ed":"#f8fafc",border:sh.enabled?"1px solid #fed7aa":"1px solid #e2e8f0"}}>
+                  <button onClick={()=>setLForm(f=>({...f,dayShifts:{...(f.dayShifts??{}),[i]:{...(f.dayShifts?.[i]??{startTime:"09:00",endTime:"13:00"}),enabled:!sh.enabled}}}))}
+                    style={{width:36,height:36,borderRadius:8,border:"none",background:sh.enabled?"#f97316":"#e2e8f0",color:"white",fontWeight:700,fontSize:13,cursor:"pointer",...F}}>{d}</button>
+                  {sh.enabled&&(
+                    <>
+                      <select value={sh.startTime||"09:00"} onChange={e=>setLForm(f=>({...f,dayShifts:{...(f.dayShifts??{}),[i]:{...sh,startTime:e.target.value}}}))}
+                        style={{flex:1,padding:"6px 8px",borderRadius:8,border:"1px solid #fed7aa",background:"white",fontSize:14,...F}}>
+                        {Array.from({length:(22-6)*4+1},(_,j)=>{const hh=6+Math.floor(j/4),mm=(j%4)*15;return `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <span style={{color:"#94a3b8",fontSize:13}}>〜</span>
+                      <select value={sh.endTime||"13:00"} onChange={e=>setLForm(f=>({...f,dayShifts:{...(f.dayShifts??{}),[i]:{...sh,endTime:e.target.value}}}))}
+                        style={{flex:1,padding:"6px 8px",borderRadius:8,border:"1px solid #fed7aa",background:"white",fontSize:14,...F}}>
+                        {Array.from({length:(22-6)*4+1},(_,j)=>{const hh=6+Math.floor(j/4),mm=(j%4)*15;return `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`}).map(t=><option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <span style={{fontSize:12,color:"#f97316",fontWeight:700,minWidth:36,textAlign:"right"}}>
+                        {calcFeeFromTime(sh.startTime,sh.endTime,1)>0?`${Math.floor(calcFeeFromTime(sh.startTime,sh.endTime,1)/60)}h${calcFeeFromTime(sh.startTime,sh.endTime,1)%60>0?`${calcFeeFromTime(sh.startTime,sh.endTime,1)%60}m`:""}` :""}
+                      </span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <Label>交通費</Label>
+          <div style={{display:"flex",gap:8,marginBottom:14}}>
+            {[["shift","出勤ごと"],["month","月まとめ"],["none","なし"]].map(([val,label])=>(
+              <button key={val} onClick={()=>setLForm(f=>({...f,transportPer:val}))}
+                style={{flex:1,padding:"8px 4px",borderRadius:8,border:(lForm.transportPer??"shift")===val?"2px solid #10b981":"2px solid #e2e8f0",background:(lForm.transportPer??"shift")===val?"#f0fdf4":"white",color:(lForm.transportPer??"shift")===val?"#10b981":"#64748b",fontSize:12,cursor:"pointer",...F}}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {(lForm.transportPer!=="none")&&<LInput type="number" value={lForm.transport||""} onChange={v=>setLForm(f=>({...f,transport:v}))} placeholder="例：500"/>}
+          <button onClick={savePart} style={{width:"100%",padding:16,borderRadius:12,border:"none",background:"linear-gradient(135deg,#f97316,#f59e0b)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",...F}}>
+            {editPart?"更新する":"追加する"}
+          </button>
         </Modal>
       )}
 
