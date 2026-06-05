@@ -108,7 +108,7 @@ export default function App() {
   const [allExpenses, setAllExpenses] = useState(() => load("en3_expenses", {}));
   const [allSpots,    setAllSpots]    = useState(() => load("en3_spots",    {}));
   const [allSubs,     setAllSubs]     = useState(() => load("en3_subs",     {}));
-  const [subSettings, setSubSettingsRaw] = useState(() => load("en3_sub_settings", { serviceName:"ENARIZE MEMBERS", normalPrice:1500, vipPrice:1000, normalCount:0, vipCount:0 }));
+  const [subSettings, setSubSettingsRaw] = useState(() => load("en3_sub_settings", { serviceName:"", normalPrice:1500, vipPrice:1000, normalCount:0, vipCount:0 }));
 
   const [merch,       setMerchRaw]    = useState(() => load("en3_merch",    []));
   const [allMerchLogs,setAllMerchLogs]= useState(() => load("en3_merch_logs", {}));
@@ -295,6 +295,13 @@ export default function App() {
 
   // ★ その日だけシフト時間変更用state
   const [editingShift, setEditingShift] = useState(null);
+
+  // ★ AI登録
+  const [showAiInput, setShowAiInput] = useState(false);
+  const [aiText, setAiText] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiPreview, setAiPreview] = useState(null); // 解析結果プレビュー
+  const [aiError, setAiError] = useState("");
   // editingShift = { ds: "2026-06-05", startTime: "09:00", endTime: "13:00" } | null
 
   const [spotForm, setSpotForm] = useState({ name:"", date:`${mk}-01`, amount:"", note:"" });
@@ -312,6 +319,85 @@ export default function App() {
     const at = a.startTime || "00:00", bt = b.startTime || "00:00";
     return at.localeCompare(bt);
   });
+
+  const callAI = async () => {
+    if (!aiText.trim()) return;
+    setAiLoading(true);
+    setAiError("");
+    setAiPreview(null);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: `以下のレッスン情報をJSONに変換してください。JSONのみ返してください。マークダウンや説明文は不要です。
+
+入力: "${aiText}"
+
+JSONの形式:
+{
+  "category": "regular" | "circle" | "event",
+  "lessonName": "レッスン名（なければ空文字）",
+  "place": "施設名・場所名",
+  "day": 0〜6の数字（月=0,火=1,水=2,木=3,金=4,土=5,日=6）,
+  "startTime": "HH:MM",
+  "endTime": "HH:MM",
+  "fee": 数字（円）,
+  "freq": "毎週" | "隔週" | "月1回" | "月2回",
+  "transport": 数字（交通費円、なければ0）,
+  "feeMode": "fixed",
+  "holiday5": false,
+  "holidayOff": false,
+  "unitPrice": 0,
+  "defaultPeople": 10,
+  "hourlyRate": 0,
+  "transportPer": "shift"
+}
+
+注意:
+- categoryはcircleは「人数×単価」形式のみ。通常は"regular"
+- dayは必ず0〜6の数字
+- 時間は24時間形式のHH:MM
+- 金額は数字のみ（¥や円は除く）
+- 不明な項目はデフォルト値を使用`
+          }]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.map(i => i.text || "").join("") || "";
+      const clean = text.replace(/\`\`\`json|\`\`\`/g, "").trim();
+      const parsed = JSON.parse(clean);
+      setAiPreview(parsed);
+    } catch(e) {
+      setAiError("うまく読み取れませんでした。もう少し詳しく入力してみてください。");
+    }
+    setAiLoading(false);
+  };
+
+  const confirmAiLesson = () => {
+    if (!aiPreview) return;
+    const l = {
+      ...blankLesson,
+      ...aiPreview,
+      id: Date.now(),
+      day: Number(aiPreview.day ?? 0),
+      fee: Number(aiPreview.fee ?? 0),
+      unitPrice: Number(aiPreview.unitPrice ?? 0),
+      hourlyRate: Number(aiPreview.hourlyRate ?? 0),
+      defaultPeople: Number(aiPreview.defaultPeople ?? 10),
+      transport: Number(aiPreview.transport ?? 0),
+    };
+    setLessons(p => sortLessons([...p, l]));
+    setLogs(p => ({...p, [l.id]:{ count:defaultCount(l.freq), active:true, skipDates:[], people:l.defaultPeople, hours:1 }}));
+    setAiPreview(null);
+    setAiText("");
+    setShowAiInput(false);
+    flash();
+  };
 
   const saveLesson = () => {
     if (!lForm.place) return;
@@ -563,6 +649,70 @@ export default function App() {
         {/* ══ INPUT（サークル・メンバー） ══ */}
         {tab==="input"&&(
           <div>
+            {/* ✨ AI登録ボタン */}
+            <button onClick={()=>{setShowAiInput(v=>!v);setAiPreview(null);setAiError("");}}
+              style={{width:"100%",padding:16,borderRadius:14,border:"none",background:showAiInput?"#6366f1":"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",marginBottom:14,...F,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              <span style={{fontSize:22}}>✨</span> AIでレッスンを登録する
+            </button>
+
+            {/* AI入力パネル */}
+            {showAiInput&&(
+              <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #6366f120",border:"1px solid #e0e7ff"}}>
+                <div style={{fontSize:13,color:"#6366f1",fontWeight:700,marginBottom:10}}>✨ レッスン情報を自然な文章で入力してください</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:10,lineHeight:1.6}}>
+                  例：「毎週月曜10時から11時、○○体育館でエアロビ、報酬3500円」<br/>
+                  例：「火曜と木曜の14時〜15時、△△スポーツクラブ、交通費500円込みで4000円」
+                </div>
+                <textarea
+                  value={aiText}
+                  onChange={e=>setAiText(e.target.value)}
+                  placeholder="ここにレッスン情報を入力..."
+                  rows={3}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1.5px solid #e0e7ff",background:"#f8fafc",color:"#1e293b",fontSize:16,marginBottom:10,boxSizing:"border-box",resize:"none",...F,outline:"none"}}
+                />
+                {aiError&&<div style={{fontSize:12,color:"#ef4444",marginBottom:10}}>{aiError}</div>}
+
+                {/* 解析結果プレビュー */}
+                {aiPreview&&(
+                  <div style={{background:"#f0f9ff",borderRadius:12,padding:"12px 14px",marginBottom:12,border:"1px solid #bae6fd"}}>
+                    <div style={{fontSize:12,color:"#0284c7",fontWeight:700,marginBottom:8}}>📋 こんな内容で登録しますか？</div>
+                    {[
+                      ["カテゴリ", CATEGORIES[aiPreview.category]?.label ?? aiPreview.category],
+                      ["場所", aiPreview.place],
+                      ["レッスン名", aiPreview.lessonName || "（なし）"],
+                      ["曜日", SCHED_DAYS[Number(aiPreview.day)] + "曜"],
+                      ["時間", `${aiPreview.startTime}〜${aiPreview.endTime}`],
+                      ["報酬", `¥${Number(aiPreview.fee).toLocaleString()}`],
+                      ["頻度", aiPreview.freq],
+                      ["交通費", aiPreview.transport > 0 ? `¥${Number(aiPreview.transport).toLocaleString()}` : "なし"],
+                    ].map(([k,v])=>(
+                      <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #e0f2fe"}}>
+                        <span style={{fontSize:12,color:"#64748b"}}>{k}</span>
+                        <span style={{fontSize:13,fontWeight:700,color:"#0284c7"}}>{v}</span>
+                      </div>
+                    ))}
+                    <div style={{display:"flex",gap:8,marginTop:12}}>
+                      <button onClick={confirmAiLesson}
+                        style={{flex:2,padding:"12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"white",fontWeight:700,fontSize:15,cursor:"pointer",...F}}>
+                        ✅ この内容で登録する
+                      </button>
+                      <button onClick={()=>setAiPreview(null)}
+                        style={{flex:1,padding:"12px",borderRadius:10,border:"1px solid #e0e7ff",background:"white",color:"#6366f1",fontWeight:700,fontSize:13,cursor:"pointer",...F}}>
+                        やり直す
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!aiPreview&&(
+                  <button onClick={callAI} disabled={aiLoading||!aiText.trim()}
+                    style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:aiLoading||!aiText.trim()?"#e2e8f0":"linear-gradient(135deg,#6366f1,#8b5cf6)",color:aiLoading||!aiText.trim()?"#94a3b8":"white",fontWeight:700,fontSize:16,cursor:aiLoading||!aiText.trim()?"not-allowed":"pointer",...F}}>
+                    {aiLoading ? "🤖 解析中..." : "🔍 AIで解析する"}
+                  </button>
+                )}
+              </div>
+            )}
+
             <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>🏃 サークル・人数入力</div>
             {lessons.filter(l=>l.category==="circle").map(l=>{
               const cat=CATEGORIES[l.category];
@@ -593,6 +743,17 @@ export default function App() {
             })}
             {lessons.filter(l=>l.category==="circle").length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:15}}><div style={{fontSize:36,marginBottom:8}}>👥</div>⚙️ レッスン管理からサークルを追加してね</div>}
 
+            {/* サービス名未設定時は設定促すボタンのみ表示 */}
+            {!subSettings.serviceName ? (
+              <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:"1px dashed #10b98140",textAlign:"center"}}>
+                <div style={{fontSize:28,marginBottom:8}}>📱</div>
+                <div style={{fontSize:14,color:"#94a3b8",marginBottom:12}}>サブスクサービスを使っていますか？</div>
+                <button onClick={()=>document.getElementById("sub-service-name")?.focus()}
+                  style={{padding:"10px 20px",borderRadius:10,border:"none",background:"#10b981",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>
+                  ＋ サブスクを設定する
+                </button>
+              </div>
+            ) : (
             <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:"1px solid #10b98120"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <div><div style={{fontSize:14,fontWeight:700}}>📱 {subSettings.serviceName||"ENARIZE MEMBERS"}</div><div style={{fontSize:11,color:"#94a3b8"}}>通常¥{(subSettings.normalPrice??1500).toLocaleString()} / 👑¥{(subSettings.vipPrice??1000).toLocaleString()}</div></div>
@@ -606,7 +767,7 @@ export default function App() {
                   value={subSettings.serviceName||""}
                   onChange={e=>setSubSettings(s=>({...s,serviceName:e.target.value}))}
                   placeholder="例：ENARIZE MEMBERS"
-                  style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
+                  id="sub-service-name" style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
                 />
               </div>
               {/* 単価設定 */}
@@ -647,6 +808,7 @@ export default function App() {
                 <span style={{marginLeft:"auto",fontSize:14,fontWeight:700,color:"#a855f7",fontFamily:"'DM Mono',monospace"}}>¥{((subSettings.vipCount??0)*(subSettings.vipPrice??1000)).toLocaleString()}</span>
               </div>
             </div>
+            )}
           </div>
         )}
 
