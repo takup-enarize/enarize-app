@@ -758,7 +758,7 @@ JSONの形式:
                   type="text"
                   value={subSettings.serviceName||""}
                   onChange={e=>setSubSettings(s=>({...s,serviceName:e.target.value}))}
-                  placeholder="例：ENARIZE MEMBERS"
+                  placeholder="例：マンツーマンレッスン月額プラン"
                   style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
                 />
               </div>
@@ -775,7 +775,7 @@ JSONの形式:
                   type="text"
                   value={subSettings.serviceName||""}
                   onChange={e=>setSubSettings(s=>({...s,serviceName:e.target.value}))}
-                  placeholder="例：ENARIZE MEMBERS"
+                  placeholder="例：マンツーマンレッスン月額プラン"
                   id="sub-service-name" style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
                 />
               </div>
