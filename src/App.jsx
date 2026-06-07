@@ -745,7 +745,7 @@ JSONの形式:
 
             <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:`1px ${subSettings.serviceName?"solid":"dashed"} #10b98140`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div><div style={{fontSize:14,fontWeight:700}}>📱 {subSettings.serviceName||"ENARIZE MEMBERS"}</div><div style={{fontSize:11,color:"#94a3b8"}}>通常¥{(subSettings.normalPrice??1500).toLocaleString()} / 👑¥{(subSettings.vipPrice??1000).toLocaleString()}</div></div>
+                <div><div style={{fontSize:14,fontWeight:700}}>📱 {subSettings.serviceName||"サブスクサービス"}</div><div style={{fontSize:11,color:"#94a3b8"}}>通常¥{(subSettings.normalPrice??1500).toLocaleString()} / 👑¥{(subSettings.vipPrice??1000).toLocaleString()}</div></div>
                 <div style={{fontSize:18,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>¥{subIncome.toLocaleString()}</div>
               </div>
               {/* サービス名 */}
