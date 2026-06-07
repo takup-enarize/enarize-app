@@ -743,27 +743,7 @@ JSONの形式:
             })}
             {lessons.filter(l=>l.category==="circle").length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:15}}><div style={{fontSize:36,marginBottom:8}}>👥</div>⚙️ レッスン管理からサークルを追加してね</div>}
 
-            {/* サービス名未設定時はシンプルな設定カードを表示 */}
-            {!subSettings.serviceName ? (
-              <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:"1px dashed #10b98160"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                  <span style={{fontSize:22}}>📱</span>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>サブスクサービス</div>
-                    <div style={{fontSize:11,color:"#94a3b8"}}>サービス名を入力すると設定が始まります</div>
-                  </div>
-                </div>
-                <input
-                  id="sub-service-name"
-                  type="text"
-                  value={subSettings.serviceName||""}
-                  onChange={e=>setSubSettings(s=>({...s,serviceName:e.target.value}))}
-                  placeholder="例：マンツーマンレッスン月額プラン"
-                  style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
-                />
-              </div>
-            ) : (
-            <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:"1px solid #10b98120"}}>
+            <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:`1px ${subSettings.serviceName?"solid":"dashed"} #10b98140`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <div><div style={{fontSize:14,fontWeight:700}}>📱 {subSettings.serviceName||"ENARIZE MEMBERS"}</div><div style={{fontSize:11,color:"#94a3b8"}}>通常¥{(subSettings.normalPrice??1500).toLocaleString()} / 👑¥{(subSettings.vipPrice??1000).toLocaleString()}</div></div>
                 <div style={{fontSize:18,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>¥{subIncome.toLocaleString()}</div>
@@ -776,7 +756,7 @@ JSONの形式:
                   value={subSettings.serviceName||""}
                   onChange={e=>setSubSettings(s=>({...s,serviceName:e.target.value}))}
                   placeholder="例：マンツーマンレッスン月額プラン"
-                  id="sub-service-name" style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
+                  style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
                 />
               </div>
               {/* 単価設定 */}
@@ -817,7 +797,6 @@ JSONの形式:
                 <span style={{marginLeft:"auto",fontSize:14,fontWeight:700,color:"#a855f7",fontFamily:"'DM Mono',monospace"}}>¥{((subSettings.vipCount??0)*(subSettings.vipPrice??1000)).toLocaleString()}</span>
               </div>
             </div>
-            )}
           </div>
         )}
 
