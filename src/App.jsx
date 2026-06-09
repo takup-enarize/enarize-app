@@ -716,7 +716,7 @@ JSONの形式:
             <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>🏃 サークル・人数入力</div>
             {lessons.filter(l=>l.category==="circle").map(l=>{
               const cat=CATEGORIES[l.category];
-              const lg=getLog(l.id);
+              const lg=logs[l.id] ?? getLog(l.id);
               const inc=lessonIncome(l);
               return (
                 <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
