@@ -159,7 +159,7 @@ export default function App() {
     const skips = lg.skipDates?.length ?? 0;
     const cnt = Math.max(0, lg.count - skips);
     const fee = getLessonFee(l);
-    if (l.category === "circle") return cnt * (lg.peopleSessions ? lg.peopleSessions.reduce((a,p)=>a+p,0)/lg.peopleSessions.length : (l.defaultPeople??10)) * (l.unitPrice??0);
+    if (l.category === "circle") { const sessions = lg.peopleSessions ?? Array(cnt).fill(l.defaultPeople??10); return sessions.slice(0,cnt).reduce((a,p)=>a+p,0) * (l.unitPrice??0); }
     if (l.category === "part") {
       const transport = Number(l.transport) || 0;
       const rate = Number(l.hourlyRate) || 0;
