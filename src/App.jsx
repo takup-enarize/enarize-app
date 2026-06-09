@@ -728,10 +728,10 @@ JSONの形式:
                     <div key={si} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
                       <div style={{fontSize:14,color:"#94a3b8",minWidth:50}}>{si+1}回目</div>
                       <button onClick={(e)=>{e.stopPropagation();const lid=l.id;setLogs(p=>{const cur=p[lid]??getLog(lid);const cnt=cur.count??1;const base=Array(Math.max(cnt,si+1)).fill(l.defaultPeople);const s=base.map((_,i)=>cur.peopleSessions?.[i]??l.defaultPeople);s[si]=Math.max(0,s[si]-1);return{...p,[lid]:{...cur,peopleSessions:[...s]}};});flash();}} style={cBtn}>－</button>
-                      <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(getLog(l.id).peopleSessions?.[si]??l.defaultPeople)}</span>
+                      <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(logs[l.id]?.peopleSessions?.[si]??l.defaultPeople)}</span>
                       <button onClick={(e)=>{e.stopPropagation();const lid=l.id;setLogs(p=>{const cur=p[lid]??getLog(lid);const cnt=cur.count??1;const base=Array(Math.max(cnt,si+1)).fill(l.defaultPeople);const s=base.map((_,i)=>cur.peopleSessions?.[i]??l.defaultPeople);s[si]=s[si]+1;return{...p,[lid]:{...cur,peopleSessions:[...s]}};});flash();}} style={cBtn}>＋</button>
                       <span style={{fontSize:13,color:"#94a3b8"}}>人</span>
-                      <span style={{fontSize:14,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((getLog(l.id).peopleSessions?.[si]??l.defaultPeople)*l.unitPrice).toLocaleString()}</span>
+                      <span style={{fontSize:14,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((logs[l.id]?.peopleSessions?.[si]??l.defaultPeople)*l.unitPrice).toLocaleString()}</span>
                     </div>
                   ))}
                   <div style={{display:"flex",gap:8,marginTop:4}}>
