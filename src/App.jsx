@@ -715,28 +715,60 @@ JSONの形式:
 
             <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>🏃 サークル・人数入力</div>
             {lessons.filter(l=>l.category==="circle").map(l=>{
-              const cat=CATEGORIES[l.category];
-              const lg=logs[l.id] ?? getLog(l.id);
-              const inc=lessonIncome(l);
+              const cat = CATEGORIES[l.category];
+              // ★ 常にlogsから最新状態を取得
+              const curLog = logs[l.id] ?? { count: defaultCount(l.freq), active:true, skipDates:[], peopleSessions:[], people: l.defaultPeople??10 };
+              const sessionCount = curLog.count ?? defaultCount(l.freq);
+              // ★ セッション配列：長さをsessionCountに合わせ、値はpeopleSessions優先、なければdefaultPeople
+              const sessions = Array.from({length: sessionCount}, (_, i) =>
+                (curLog.peopleSessions ?? [])[i] ?? (l.defaultPeople ?? 10)
+              );
+              const totalInc = sessions.reduce((s, p) => s + p * (l.unitPrice ?? 0), 0);
+
+              // ★ 人数変更：シンプルに配列を作り直して保存
+              const updatePeople = (si, delta) => {
+                setLogs(p => {
+                  const log = p[l.id] ?? curLog;
+                  const newSessions = Array.from({length: log.count ?? defaultCount(l.freq)}, (_, i) =>
+                    (log.peopleSessions ?? [])[i] ?? (l.defaultPeople ?? 10)
+                  );
+                  newSessions[si] = Math.max(0, newSessions[si] + delta);
+                  return { ...p, [l.id]: { ...log, peopleSessions: newSessions } };
+                });
+                flash();
+              };
+
+              const updateCount = (delta) => {
+                setLogs(p => {
+                  const log = p[l.id] ?? curLog;
+                  const newCount = Math.max(1, (log.count ?? defaultCount(l.freq)) + delta);
+                  return { ...p, [l.id]: { ...log, count: newCount } };
+                });
+                flash();
+              };
+
               return (
                 <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-                    <div><div style={{fontSize:14,fontWeight:700}}>{cat.icon} {l.lessonName||l.place}</div><div style={{fontSize:11,color:"#94a3b8"}}>{l.place} {l.startTime&&l.endTime?`${l.startTime}〜${l.endTime} · `:""}<span style={{color:"#f59e0b"}}>{l.freq}</span></div></div>
-                    <div style={{fontSize:18,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:700}}>{cat.icon} {l.lessonName||l.place}</div>
+                      <div style={{fontSize:11,color:"#94a3b8"}}>{l.place} {l.startTime&&l.endTime?`${l.startTime}〜${l.endTime} · `:""}<span style={{color:"#f59e0b"}}>{l.freq}</span></div>
+                    </div>
+                    <div style={{fontSize:18,fontWeight:700,color:cat.color,fontFamily:"'DM Mono',monospace"}}>¥{totalInc.toLocaleString()}</div>
                   </div>
-                  {Array.from({length:lg.count??1}).map((_,si)=>(
+                  {sessions.map((people, si)=>(
                     <div key={si} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
                       <div style={{fontSize:14,color:"#94a3b8",minWidth:50}}>{si+1}回目</div>
-                      <button onClick={(e)=>{e.stopPropagation();const lid=l.id;setLogs(p=>{const cur=p[lid]??getLog(lid);const cnt=cur.count??1;const base=Array(Math.max(cnt,si+1)).fill(l.defaultPeople);const s=base.map((_,i)=>cur.peopleSessions?.[i]??l.defaultPeople);s[si]=Math.max(0,s[si]-1);return{...p,[lid]:{...cur,peopleSessions:[...s]}};});flash();}} style={cBtn}>－</button>
-                      <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{(logs[l.id]?.peopleSessions?.[si]??l.defaultPeople)}</span>
-                      <button onClick={(e)=>{e.stopPropagation();const lid=l.id;setLogs(p=>{const cur=p[lid]??getLog(lid);const cnt=cur.count??1;const base=Array(Math.max(cnt,si+1)).fill(l.defaultPeople);const s=base.map((_,i)=>cur.peopleSessions?.[i]??l.defaultPeople);s[si]=s[si]+1;return{...p,[lid]:{...cur,peopleSessions:[...s]}};});flash();}} style={cBtn}>＋</button>
+                      <button onClick={()=>updatePeople(si,-1)} style={cBtn}>－</button>
+                      <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{people}</span>
+                      <button onClick={()=>updatePeople(si,+1)} style={cBtn}>＋</button>
                       <span style={{fontSize:13,color:"#94a3b8"}}>人</span>
-                      <span style={{fontSize:14,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{((logs[l.id]?.peopleSessions?.[si]??l.defaultPeople)*l.unitPrice).toLocaleString()}</span>
+                      <span style={{fontSize:14,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{(people*(l.unitPrice??0)).toLocaleString()}</span>
                     </div>
                   ))}
                   <div style={{display:"flex",gap:8,marginTop:4}}>
-                    <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:Math.max(1,(cur.count??1)-1)}};});flash();}} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 －</button>
-                    <button onClick={()=>{setLogs(p=>{const cur={...getLog(l.id)};return{...p,[l.id]:{...cur,count:(cur.count??1)+1}};});flash();}} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 ＋</button>
+                    <button onClick={()=>updateCount(-1)} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 －</button>
+                    <button onClick={()=>updateCount(+1)} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 ＋</button>
                   </div>
                 </div>
               );
