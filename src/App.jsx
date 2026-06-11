@@ -154,12 +154,20 @@ export default function App() {
   }, [logs, lessons]);
 
   const lessonIncome = useCallback((l) => {
-    const lg = getLog(l.id);
+    const lg = logs[l.id] ?? getLog(l.id);
     if (!lg.active) return 0;
     const skips = lg.skipDates?.length ?? 0;
-    const cnt = Math.max(0, lg.count - skips);
+    const cnt = Math.max(0, (lg.count ?? defaultCount(l.freq)) - skips);
     const fee = getLessonFee(l);
-    if (l.category === "circle") { const sessions = lg.peopleSessions ?? Array(cnt).fill(l.defaultPeople??10); return sessions.slice(0,cnt).reduce((a,p)=>a+p,0) * (l.unitPrice??0); }
+    if (l.category === "circle") {
+      // 日付指定イベントで今月以外は0
+      if (l.specificDate) {
+        const [y,m] = l.specificDate.split("-").map(Number);
+        if (y !== calYear || m !== calMonth) return 0;
+      }
+      const sessions = lg.peopleSessions ?? Array(cnt).fill(l.defaultPeople??10);
+      return sessions.slice(0,cnt).reduce((a,p)=>a+p,0) * (l.unitPrice??0);
+    }
     if (l.category === "part") {
       const transport = Number(l.transport) || 0;
       const rate = Number(l.hourlyRate) || 0;
@@ -237,7 +245,14 @@ export default function App() {
     for (let d = 1; d <= last; d++) {
       const dow = new Date(calYear, calMonth-1, d).getDay();
       const si  = dow === 0 ? 6 : dow - 1;
-      const ls  = lessons.filter(l => l.day===si && getLog(l.id).active && !isRestDay(l,d) && !isSkipped(l.id,d));
+      const ds_full = `${calYear}-${String(calMonth).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const ls  = lessons.filter(l => {
+        if (!getLog(l.id).active) return false;
+        if (isRestDay(l,d) || isSkipped(l.id,d)) return false;
+        // 日付指定イベントは指定日のみ表示
+        if (l.specificDate) return l.specificDate === ds_full;
+        return l.day === si;
+      });
       if (ls.length) map[d] = ls;
     }
     return map;
@@ -247,7 +262,12 @@ export default function App() {
     if (!selDay) return [];
     const dow = new Date(calYear, calMonth-1, selDay).getDay();
     const si  = dow === 0 ? 6 : dow - 1;
-    return lessons.filter(l => l.day===si && getLog(l.id).active);
+    const ds_full = `${calYear}-${String(calMonth).padStart(2,"0")}-${String(selDay).padStart(2,"0")}`;
+    return lessons.filter(l => {
+      if (!getLog(l.id).active) return false;
+      if (l.specificDate) return l.specificDate === ds_full;
+      return l.day === si;
+    });
   }, [selDay, calYear, calMonth, lessons, logs]);
 
   const paydayMap = useMemo(() => {
@@ -1288,6 +1308,22 @@ JSONの形式:
           <TimePicker label="開始時間" value={lForm.startTime} onChange={v=>setLForm(f=>({...f,startTime:v}))}/>
           <TimePicker label="終了時間" value={lForm.endTime} onChange={v=>setLForm(f=>({...f,endTime:v}))}/>
 
+          {lForm.category==="event"&&(
+            <>
+              <Label>📅 日付指定（特定の日だけ）</Label>
+              <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
+                <button onClick={()=>setLForm(f=>({...f,specificDate:f.specificDate?"":""}))}
+                  style={{width:48,height:26,borderRadius:13,background:lForm.specificDate?"#ef4444":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}
+                  onClick={()=>setLForm(f=>({...f,specificDate:f.specificDate?"":(`${calYear}-${String(calMonth).padStart(2,"0")}-01`)}))}>
+                  <div style={{width:20,height:20,borderRadius:"50%",background:"white",position:"absolute",top:3,left:lForm.specificDate?25:3,transition:"left 0.2s"}}/>
+                </button>
+                <span style={{fontSize:13,color:"#64748b"}}>{lForm.specificDate?"日付を指定する（その月のみ表示）":"毎月繰り返す"}</span>
+              </div>
+              {lForm.specificDate&&(
+                <LInput type="date" value={lForm.specificDate} onChange={v=>setLForm(f=>({...f,specificDate:v}))}/>
+              )}
+            </>
+          )}
           {(lForm.category==="regular"||lForm.category==="event")&&(
             <>
               <Label>報酬の計算方法</Label>
