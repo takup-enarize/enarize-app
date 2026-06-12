@@ -154,6 +154,8 @@ export default function App() {
   }, [logs, lessons]);
 
   const lessonIncome = useCallback((l) => {
+    const curMk = `${calYear}-${String(calMonth).padStart(2,"0")}`;
+    if (l.startMonth && l.startMonth > curMk) return 0;
     const lg = logs[l.id] ?? getLog(l.id);
     if (!lg.active) return 0;
     const skips = lg.skipDates?.length ?? 0;
@@ -246,7 +248,9 @@ export default function App() {
       const dow = new Date(calYear, calMonth-1, d).getDay();
       const si  = dow === 0 ? 6 : dow - 1;
       const ds_full = `${calYear}-${String(calMonth).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const curMk = `${calYear}-${String(calMonth).padStart(2,"0")}`;
       const ls  = lessons.filter(l => {
+        if (l.startMonth && l.startMonth > curMk) return false;
         if (!getLog(l.id).active) return false;
         if (isRestDay(l,d) || isSkipped(l.id,d)) return false;
         // 日付指定イベントは指定日のみ表示
@@ -263,8 +267,10 @@ export default function App() {
     const dow = new Date(calYear, calMonth-1, selDay).getDay();
     const si  = dow === 0 ? 6 : dow - 1;
     const ds_full = `${calYear}-${String(calMonth).padStart(2,"0")}-${String(selDay).padStart(2,"0")}`;
+    const curMk2 = `${calYear}-${String(calMonth).padStart(2,"0")}`;
     return lessons.filter(l => {
       if (!getLog(l.id).active) return false;
+      if (l.startMonth && l.startMonth > curMk2) return false;
       if (l.specificDate) return l.specificDate === ds_full;
       return l.day === si;
     });
@@ -294,7 +300,7 @@ export default function App() {
   }, [expenses]);
 
   // forms
-  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"", shiftType:"fixed", transportPer:"shift", dayShifts:{} };
+  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"", shiftType:"fixed", transportPer:"shift", dayShifts:{}, startMonth:"" };
   const [lForm, setLForm] = useState(blankLesson);
   const [editLesson, setEditLesson] = useState(null);
   const [showAddLesson,  setShowAddLesson]  = useState(false);
@@ -1122,7 +1128,7 @@ JSONの形式:
                         <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>{l.lessonName&&<span style={{marginRight:6,color:"#1e293b"}}>{l.lessonName}</span>}<span style={{color:"#64748b"}}>{l.place}</span></div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>
                           {SCHED_DAYS[l.day]}曜{l.startTime&&l.endTime?` ${l.startTime}〜${l.endTime}`:""} · <span style={{color:"#f59e0b"}}>{l.freq}</span>
-                          {l.holiday5&&<span style={{marginLeft:4,color:"#f59e0b",fontSize:10}}>🏢5の日休</span>}
+                          {l.startMonth&&<span style={{marginLeft:4,color:"#3b82f6",fontSize:10}}>📅{l.startMonth.replace("-","年")}月〜</span>}{l.holiday5&&<span style={{marginLeft:4,color:"#f59e0b",fontSize:10}}>🏢5の日休</span>}
                           {l.holidayOff&&<span style={{marginLeft:4,color:"#db2777",fontSize:10}}>🎌祝日休</span>}
                         </div>
                         <div style={{fontSize:12,fontWeight:700,color:cat.color,marginTop:2,fontFamily:"'DM Mono',monospace"}}>
@@ -1351,6 +1357,13 @@ JSONの形式:
           <Label>交通費支給</Label>
           <LInput type="number" value={lForm.transport||""} onChange={v=>setLForm(f=>({...f,transport:v}))} placeholder="例：500"/>
 
+          <Label>開始月（任意）</Label>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:11,color:"#94a3b8",marginBottom:6}}>未設定の場合はすべての月に表示されます</div>
+            <input type="month" value={lForm.startMonth||""} onChange={e=>setLForm(f=>({...f,startMonth:e.target.value}))}
+              style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#1e293b",fontSize:16,boxSizing:"border-box",...F,outline:"none"}}/>
+            {lForm.startMonth&&<div style={{fontSize:12,color:"#3b82f6",marginTop:6,fontWeight:700}}>📅 {lForm.startMonth.replace("-","年")}月から表示</div>}
+          </div>
           <Label>頻度</Label>
           <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
             {FREQS.map(fr=>(
