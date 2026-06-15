@@ -220,8 +220,9 @@ export default function App() {
   }, [getLog, mk]);
 
   const isRestDay = useCallback((l, date) => {
-    if (l.holiday5 && has5(date)) return "5のつく日休館";
     if (l.holidayOff && isHoliday(calYear, calMonth, date)) return "祝日休み";
+    if ((l.closedDays??[]).includes(date)) return "休館日";
+    if (l.holiday5 && has5(date)) return "5のつく日休館";
     return null;
   }, [calYear, calMonth]);
 
@@ -300,7 +301,7 @@ export default function App() {
   }, [expenses]);
 
   // forms
-  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"", shiftType:"fixed", transportPer:"shift", dayShifts:{}, startMonth:"" };
+  const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"", shiftType:"fixed", transportPer:"shift", dayShifts:{}, startMonth:"", closedDays:[] };
   const [lForm, setLForm] = useState(blankLesson);
   const [editLesson, setEditLesson] = useState(null);
   const [showAddLesson,  setShowAddLesson]  = useState(false);
@@ -443,7 +444,7 @@ JSONの形式:
   const deletePart = id => { if(window.confirm("このアルバイトを削除しますか？")) { setLessons(p=>p.filter(x=>x.id!==id)); flash(); }};
   const deleteLesson = id => { if(window.confirm("このレッスンを削除しますか？")) { setLessons(p=>p.filter(x=>x.id!==id)); flash(); }};
   const saveSpot    = () => { if(!spotForm.name||!spotForm.amount) return; setSpots(p=>[...p,{id:Date.now(),...spotForm,amount:Number(spotForm.amount)}]); setShowAddSpot(false); flash(); };
-  const saveExpense = () => { if(!expForm.amount) return; setExpenses(p=>[...p,{id:Date.now(),...expForm}]); setShowAddExpense(false); flash(); };
+  const saveExpense = () => { if(!expForm.amount) return; const finalCat = expForm.category==="その他"&&expForm.customCategory ? expForm.customCategory : expForm.category; setExpenses(p=>[...p,{id:Date.now(),...expForm,category:finalCat}]); setShowAddExpense(false); flash(); };
   const savePayGroup= () => { if(!pgForm.name) return; setPayGroups(p=>[...p,{id:Date.now(),...pgForm,payDay:Number(pgForm.payDay)}]); setShowAddPayGroup(false); setPgForm({name:"",payDay:"",lessonIds:[]}); flash(); };
   const saveSub     = () => {
     if(!subForm.lessonId||!subForm.date) return;
@@ -1128,7 +1129,7 @@ JSONの形式:
                         <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>{l.lessonName&&<span style={{marginRight:6,color:"#1e293b"}}>{l.lessonName}</span>}<span style={{color:"#64748b"}}>{l.place}</span></div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>
                           {SCHED_DAYS[l.day]}曜{l.startTime&&l.endTime?` ${l.startTime}〜${l.endTime}`:""} · <span style={{color:"#f59e0b"}}>{l.freq}</span>
-                          {l.startMonth&&<span style={{marginLeft:4,color:"#3b82f6",fontSize:10}}>📅{l.startMonth.replace("-","年")}月〜</span>}{l.holiday5&&<span style={{marginLeft:4,color:"#f59e0b",fontSize:10}}>🏢5の日休</span>}
+                          {l.startMonth&&<span style={{marginLeft:4,color:"#3b82f6",fontSize:10}}>📅{l.startMonth.replace("-","年")}月〜</span>}{(l.closedDays??[]).length>0&&<span style={{marginLeft:4,color:"#f59e0b",fontSize:10}}>🏢休{(l.closedDays??[]).join("・")}日</span>}
                           {l.holidayOff&&<span style={{marginLeft:4,color:"#db2777",fontSize:10}}>🎌祝日休</span>}
                         </div>
                         <div style={{fontSize:12,fontWeight:700,color:cat.color,marginTop:2,fontFamily:"'DM Mono',monospace"}}>
@@ -1374,15 +1375,36 @@ JSONの形式:
 
           <div style={{borderTop:"1px solid #f1f5f9",paddingTop:12,marginBottom:14}}>
             <Label>休館日設定</Label>
-            {[["holiday5","🏢 5のつく日は休館日"],["holidayOff","🎌 祝日は休み"]].map(([key,label])=>(
-              <div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                <span style={{fontSize:13,color:"#64748b"}}>{label}</span>
-                <button onClick={()=>setLForm(f=>({...f,[key]:!f[key]}))}
-                  style={{width:48,height:26,borderRadius:13,background:lForm[key]?"#3b82f6":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
-                  <div style={{width:20,height:20,borderRadius:"50%",background:"white",position:"absolute",top:3,left:lForm[key]?25:3,transition:"left 0.2s"}}/>
-                </button>
-              </div>
-            ))}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+              <span style={{fontSize:13,color:"#64748b"}}>🎌 祝日は休み</span>
+              <button onClick={()=>setLForm(f=>({...f,holidayOff:!f.holidayOff}))}
+                style={{width:48,height:26,borderRadius:13,background:lForm.holidayOff?"#3b82f6":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:"white",position:"absolute",top:3,left:lForm.holidayOff?25:3,transition:"left 0.2s"}}/>
+              </button>
+            </div>
+            <div style={{fontSize:13,color:"#64748b",marginBottom:8}}>🏢 毎月休みの日付（複数可）</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+              {(lForm.closedDays??[]).map((d,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"4px 10px"}}>
+                  <span style={{fontSize:13,color:"#3b82f6",fontWeight:700}}>毎月{d}日</span>
+                  <button onClick={()=>setLForm(f=>({...f,closedDays:(f.closedDays??[]).filter((_,j)=>j!==i)}))}
+                    style={{background:"none",border:"none",color:"#94a3b8",fontSize:14,cursor:"pointer",padding:0,lineHeight:1}}>×</button>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <input type="number" min="1" max="31" placeholder="日付（例：15）"
+                id="closedDayInput"
+                style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",fontSize:15,...F,outline:"none"}}/>
+              <button onClick={()=>{
+                const input=document.getElementById("closedDayInput");
+                const val=parseInt(input.value);
+                if(val>=1&&val<=31&&!(lForm.closedDays??[]).includes(val)){
+                  setLForm(f=>({...f,closedDays:[...(f.closedDays??[]),val].sort((a,b)=>a-b)}));
+                  input.value="";
+                }
+              }} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#3b82f6",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",...F}}>追加</button>
+            </div>
           </div>
 
           <button onClick={saveLesson} style={{width:"100%",padding:16,borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",...F}}>
@@ -1431,6 +1453,12 @@ JSONの形式:
                 style={{padding:"6px 14px",borderRadius:8,border:expForm.category===cat?`2px solid ${EXPENSE_COLORS[cat]}`:"2px solid #e2e8f0",background:expForm.category===cat?EXPENSE_COLORS[cat]+"15":"white",color:expForm.category===cat?EXPENSE_COLORS[cat]:"#64748b",fontSize:12,cursor:"pointer",...F}}>{cat}</button>
             ))}
           </div>
+          {expForm.category==="その他"&&(
+            <>
+              <Label>カテゴリ名を入力</Label>
+              <LInput value={expForm.customCategory||""} onChange={v=>setExpForm(f=>({...f,customCategory:v}))} placeholder="例：ガソリン・書籍・衣装代"/>
+            </>
+          )}
           <Label>金額（円）</Label><LInput type="number" value={expForm.amount} onChange={v=>setExpForm(f=>({...f,amount:v}))} placeholder="例：500"/>
           <Label>日付</Label><LInput type="date" value={expForm.date} onChange={v=>setExpForm(f=>({...f,date:v}))}/>
           <Label>メモ（任意）</Label><LInput value={expForm.note} onChange={v=>setExpForm(f=>({...f,note:v}))} placeholder="例：○○体育館まで"/>
