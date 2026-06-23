@@ -566,6 +566,23 @@ JSONの形式:
 
             {selDay&&(
               <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px #00000012"}}>
+                {(()=>{
+                  // その日の合計収入を計算
+                  const dayLessons = allLessonsByDate;
+                  const dayLessonIncome = dayLessons.filter(l=>!isRestDay(l,selDay)&&!isSkipped(l.id,selDay)).reduce((s,l)=>s+getLessonFee(l),0);
+                  const daySpotIncome = (spotsByDate[selDay]??[]).reduce((s,e)=>s+Number(e.amount),0);
+                  const daySubIncome  = (subsByDate[selDay]??[]).reduce((s,e)=>s+(e.fee??0),0);
+                  const dayTotal = dayLessonIncome + daySpotIncome + daySubIncome;
+                  return dayTotal > 0 ? (
+                    <div style={{background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",borderRadius:14,padding:"14px 18px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontSize:11,color:"#ffffff99",letterSpacing:1,marginBottom:4}}>💰 今日の収入合計</div>
+                        <div style={{fontSize:28,fontWeight:700,color:"white",fontFamily:"'DM Mono',monospace"}}>¥{dayTotal.toLocaleString()}</div>
+                      </div>
+                      <div style={{fontSize:36}}>🎉</div>
+                    </div>
+                  ) : null;
+                })()}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                   <div style={{fontSize:18,fontWeight:700,color:"#3b82f6"}}>
                     {calMonth}月{selDay}日
