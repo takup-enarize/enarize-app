@@ -574,12 +574,9 @@ JSONの形式:
                   const daySubIncome  = (subsByDate[selDay]??[]).reduce((s,e)=>s+(e.fee??0),0);
                   const dayTotal = dayLessonIncome + daySpotIncome + daySubIncome;
                   return dayTotal > 0 ? (
-                    <div style={{background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",borderRadius:14,padding:"14px 18px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div>
-                        <div style={{fontSize:11,color:"#ffffff99",letterSpacing:1,marginBottom:4}}>💰 今日の収入合計</div>
-                        <div style={{fontSize:28,fontWeight:700,color:"white",fontFamily:"'DM Mono',monospace"}}>¥{dayTotal.toLocaleString()}</div>
-                      </div>
-                      <div style={{fontSize:36}}>🎉</div>
+                    <div style={{background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",borderRadius:14,padding:"14px 18px",marginBottom:14}}>
+                      <div style={{fontSize:11,color:"#ffffff99",letterSpacing:1,marginBottom:4}}>💰 今日の収入合計</div>
+                      <div style={{fontSize:28,fontWeight:700,color:"white",fontFamily:"'DM Mono',monospace"}}>¥{dayTotal.toLocaleString()}</div>
                     </div>
                   ) : null;
                 })()}
