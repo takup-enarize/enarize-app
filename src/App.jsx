@@ -112,12 +112,14 @@ export default function App() {
 
   const [merch,       setMerchRaw]    = useState(() => load("en3_merch",    []));
   const [allMerchLogs,setAllMerchLogs]= useState(() => load("en3_merch_logs", {}));
+  const [allEvents,   setAllEvents]   = useState(() => load("en3_events",   {}));
 
   const logs     = allLogs[mk]     ?? {};
   const expenses = allExpenses[mk] ?? [];
   const spots    = allSpots[mk]    ?? [];
   const subs     = allSubs[mk]     ?? [];
   const merchLogs= allMerchLogs[mk] ?? [];
+  const events   = allEvents[mk]   ?? [];
 
   const flash = () => { setBadge(true); setTimeout(() => setBadge(false), 1500); };
 
@@ -126,6 +128,7 @@ export default function App() {
   const setSpots     = useCallback(fn => setAllSpots(p     => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_spots",n); return n; }), [mk]);
   const setSubs      = useCallback(fn => setAllSubs(p      => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_subs",n); return n; }), [mk]);
   const setMerchLogs = useCallback(fn => setAllMerchLogs(p => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_merch_logs",n); return n; }), [mk]);
+  const setEvents    = useCallback(fn => setAllEvents(p    => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_events",n);     return n; }), [mk]);
   const setMerch     = (v) => { setMerchRaw(v); save("en3_merch", v); };
   const setSubSettings = v => { const next = typeof v === "function" ? v(subSettings) : v; setSubSettingsRaw(next); save("en3_sub_settings", next); };
 
@@ -208,10 +211,16 @@ export default function App() {
   }, [merchLogs, merch]);
 
   const subsIncome   = subs.reduce((s,e) => s + (e.fee ?? 0), 0);
+  const eventIncome  = events.reduce((s,ev) => {
+    const single1 = (ev.price1??0) * (ev.count1??0);
+    const single2 = (ev.price2??0) * (ev.count2??0);
+    const setIncome = (ev.setPrice??0) * (ev.setCount??0);
+    return s + single1 + single2 + setIncome;
+  }, 0);
   const totalLessonIncome = useMemo(() => lessons.reduce((s,l) => s + lessonIncome(l), 0), [lessons, logs]);
   const subIncome    = (subSettings.normalCount ?? 0) * (subSettings.normalPrice ?? 1500) + (subSettings.vipCount ?? 0) * (subSettings.vipPrice ?? 1000);
   const spotIncome   = spots.reduce((s,e) => s + e.amount, 0);
-  const totalIncome  = totalLessonIncome + subIncome + spotIncome + subsIncome + merchIncome;
+  const totalIncome  = totalLessonIncome + subIncome + spotIncome + subsIncome + merchIncome + eventIncome;
   const totalExpenses= expenses.reduce((s,e) => s + Number(e.amount), 0);
   const netIncome    = totalIncome - totalExpenses;
 
@@ -300,6 +309,17 @@ export default function App() {
     const map = {}; expenses.forEach(e => { const d=parseInt(e.date.split("-")[2]); if(!map[d])map[d]=[]; map[d].push(e); }); return map;
   }, [expenses]);
 
+  const eventsByDate = useMemo(() => {
+    const map = {};
+    events.forEach(ev => {
+      if (!ev.date) return;
+      const d = parseInt(ev.date.split("-")[2]);
+      if (!map[d]) map[d] = [];
+      map[d].push(ev);
+    });
+    return map;
+  }, [events]);
+
   // forms
   const blankLesson = { category:"regular", lessonName:"", place:"", day:0, startTime:"", endTime:"", fee:"", freq:"毎週", holiday5:false, holidayOff:false, unitPrice:"", defaultPeople:10, hourlyRate:"", feeMode:"fixed", transport:"", shiftType:"fixed", transportPer:"shift", dayShifts:{}, startMonth:"", closedDays:[] };
   const [lForm, setLForm] = useState(blankLesson);
@@ -335,6 +355,11 @@ export default function App() {
   const [expForm,  setExpForm]  = useState({ category:"交通費", amount:"", date:`${mk}-01`, note:"" });
   const [pgForm,   setPgForm]   = useState({ name:"", payDay:"", lessonIds:[] });
   const [subForm,  setSubForm]  = useState({ lessonId:"", date:`${mk}-01`, note:"" });
+
+  const blankEvent = { name:"", date:`${mk}-01`, place:"", price1:0, count1:0, price2:0, count2:0, hasSet:false, setPrice:0, setCount:0, note:"" };
+  const [eventForm,    setEventForm]    = useState(blankEvent);
+  const [editEvent,    setEditEvent]    = useState(null);
+  const [showAddEvent, setShowAddEvent] = useState(false);
 
   const previewFee = useMemo(() => {
     if (lForm.feeMode === "calc") return calcFeeFromTime(lForm.startTime, lForm.endTime, Number(lForm.hourlyRate));
@@ -454,6 +479,17 @@ JSONの形式:
     setShowAddSub(false); flash();
   };
 
+  const saveEvent = () => {
+    if (!eventForm.name || !eventForm.date) return;
+    const ev = { ...eventForm, id: editEvent ?? Date.now(),
+      price1:Number(eventForm.price1)||0, count1:Number(eventForm.count1)||0,
+      price2:Number(eventForm.price2)||0, count2:Number(eventForm.count2)||0,
+      setPrice:Number(eventForm.setPrice)||0, setCount:Number(eventForm.setCount)||0 };
+    setEvents(p => editEvent ? p.map(x=>x.id===editEvent?ev:x) : [...p, ev]);
+    setEditEvent(null); setShowAddEvent(false); setEventForm(blankEvent); flash();
+  };
+  const deleteEvent = id => { if(window.confirm("このイベントを削除しますか？")) { setEvents(p=>p.filter(x=>x.id!==id)); flash(); }};
+
   const saveMerch = () => {
     if (!mForm.name || !mForm.price) return;
     const item = { ...mForm, id: editMerch ?? Date.now(), price: Number(mForm.price)||0, memberPrice: mForm.hasMemberPrice ? Number(mForm.memberPrice)||0 : null };
@@ -494,7 +530,7 @@ JSONの形式:
           {badge&&<div style={{fontSize:10,color:"white",background:"#ffffff30",padding:"3px 10px",borderRadius:20}}>✓ 保存済み</div>}
         </div>
         <div style={{display:"flex",overflowX:"auto"}}>
-          {[["calendar","📅"],["input","📝"],["parttime","💼"],["expenses","💸"],["lessons","🏃"],["merch","🛍️"],["analysis","📊"]].map(([key,icon])=>(
+          {[["calendar","📅"],["input","📝"],["parttime","💼"],["expenses","💸"],["lessons","🏃"],["events","🎯"],["merch","🛍️"],["analysis","📊"]].map(([key,icon])=>(
             <button key={key} onClick={()=>setTab(key)}
               style={{flexShrink:0,flex:1,padding:"9px 8px",background:"none",border:"none",borderBottom:tab===key?"2px solid white":"2px solid transparent",color:tab===key?"white":"#ffffff80",fontWeight:700,fontSize:22,cursor:"pointer"}}>
               {icon}
@@ -549,6 +585,7 @@ JSONの形式:
                         {lessonsByDate[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#8b5cf6"}}/>}
                         {paydayMap[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#f59e0b"}}/>}
                         {(spotsByDate[d]||subsByDate[d])&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#ef4444"}}/>}
+                        {eventsByDate[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#f97316"}}/>}
                         {expensesByDate[d]&&<div style={{width:4,height:4,borderRadius:"50%",background:isSel?"white":"#10b981"}}/>}
                       </div>
                     </button>
@@ -556,7 +593,7 @@ JSONの形式:
                 })}
               </div>
               <div style={{display:"flex",gap:8,marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",justifyContent:"center",flexWrap:"wrap"}}>
-                {[["#8b5cf6","レッスン"],["#f59e0b","給料日"],["#ef4444","スポット"],["#10b981","支出"],["#fce7f3","祝日"],["#fef9c3","5の日"]].map(([c,l])=>(
+                {[["#8b5cf6","レッスン"],["#f59e0b","給料日"],["#ef4444","スポット"],["#f97316","イベント"],["#10b981","支出"],["#fce7f3","祝日"],["#fef9c3","5の日"]].map(([c,l])=>(
                   <div key={l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#64748b"}}>
                     <div style={{width:8,height:8,borderRadius:"50%",background:c,border:"1px solid #e2e8f0"}}/>{l}
                   </div>
@@ -572,11 +609,15 @@ JSONの形式:
                   const dayLessonIncome = dayLessons.filter(l=>!isRestDay(l,selDay)&&!isSkipped(l.id,selDay)).reduce((s,l)=>s+getLessonFee(l),0);
                   const daySpotIncome = (spotsByDate[selDay]??[]).reduce((s,e)=>s+Number(e.amount),0);
                   const daySubIncome  = (subsByDate[selDay]??[]).reduce((s,e)=>s+(e.fee??0),0);
-                  const dayTotal = dayLessonIncome + daySpotIncome + daySubIncome;
+                  const dayEventIncome = (eventsByDate[selDay]??[]).reduce((s,ev)=>s+(ev.price1??0)*(ev.count1??0)+(ev.price2??0)*(ev.count2??0)+(ev.setPrice??0)*(ev.setCount??0),0);
+                  const dayTotal = dayLessonIncome + daySpotIncome + daySubIncome + dayEventIncome;
                   return dayTotal > 0 ? (
-                    <div style={{background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",borderRadius:14,padding:"14px 18px",marginBottom:14}}>
-                      <div style={{fontSize:11,color:"#ffffff99",letterSpacing:1,marginBottom:4}}>💰 今日の収入合計</div>
-                      <div style={{fontSize:28,fontWeight:700,color:"white",fontFamily:"'DM Mono',monospace"}}>¥{dayTotal.toLocaleString()}</div>
+                    <div style={{background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",borderRadius:14,padding:"14px 18px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontSize:11,color:"#ffffff99",letterSpacing:1,marginBottom:4}}>💰 今日の収入合計</div>
+                        <div style={{fontSize:28,fontWeight:700,color:"white",fontFamily:"'DM Mono',monospace"}}>¥{dayTotal.toLocaleString()}</div>
+                      </div>
+                      <div style={{fontSize:36}}>🎉</div>
                     </div>
                   ) : null;
                 })()}
@@ -640,6 +681,22 @@ JSONの形式:
                     </div>
                   </div>
                 ))}
+
+                {eventsByDate[selDay]?.map(ev=>{
+                  const inc = (ev.price1??0)*(ev.count1??0) + (ev.price2??0)*(ev.count2??0) + (ev.setPrice??0)*(ev.setCount??0);
+                  return (
+                    <div key={ev.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#fff7ed",borderRadius:10,marginBottom:8,border:"1px solid #fed7aa"}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700}}>🎪 {ev.name}</div>
+                        {ev.place&&<div style={{fontSize:11,color:"#94a3b8"}}>{ev.place}</div>}
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:13,fontWeight:700,color:"#f97316",fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</span>
+                        <button onClick={()=>{setTab("events");}} style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"4px 8px",color:"#f97316",fontSize:11,cursor:"pointer",...F}}>詳細</button>
+                      </div>
+                    </div>
+                  );
+                })}
 
                 {expensesByDate[selDay]?.map(e=>(
                   <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#fef2f2",borderRadius:10,marginBottom:8,border:"1px solid #fecaca"}}>
@@ -1124,6 +1181,67 @@ JSONの形式:
           </div>
         )}
 
+        {/* ══ EVENTS イベント ══ */}
+        {tab==="events"&&(
+          <div>
+            <button onClick={()=>{setEditEvent(null);setEventForm({...blankEvent,date:`${mk}-01`});setShowAddEvent(true);}}
+              style={{width:"100%",padding:16,borderRadius:14,border:"none",background:"linear-gradient(135deg,#f97316,#ef4444)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",marginBottom:16,...F}}>
+              🎪 イベントを追加する
+            </button>
+
+            {events.length===0&&(
+              <div style={{textAlign:"center",color:"#94a3b8",padding:"40px 0",fontSize:14}}>
+                <div style={{fontSize:40,marginBottom:8}}>🎪</div>
+                まだイベントが登録されていないよ！
+              </div>
+            )}
+
+            {[...events].sort((a,b)=>a.date.localeCompare(b.date)).map(ev=>{
+              const inc = (ev.price1??0)*(ev.count1??0) + (ev.price2??0)*(ev.count2??0) + (ev.setPrice??0)*(ev.setCount??0);
+              const d = ev.date ? ev.date.split("-").slice(1).join("/") : "";
+              return (
+                <div key={ev.id} style={{background:"white",borderRadius:14,padding:"14px 16px",marginBottom:10,boxShadow:"0 2px 10px #00000012"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                    <div>
+                      <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>🎪 {ev.name}</div>
+                      <div style={{fontSize:12,color:"#94a3b8"}}>{d}{ev.place&&` · ${ev.place}`}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:20,fontWeight:700,color:"#f97316",fontFamily:"'DM Mono',monospace"}}>¥{inc.toLocaleString()}</div>
+                      <div style={{display:"flex",gap:6,marginTop:4}}>
+                        <button onClick={()=>{setEditEvent(ev.id);setEventForm({...ev});setShowAddEvent(true);}} style={{background:"#fff7ed",border:"none",borderRadius:6,padding:"3px 10px",color:"#f97316",fontSize:12,cursor:"pointer",...F}}>編集</button>
+                        <button onClick={()=>deleteEvent(ev.id)} style={delBtn}>削除</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {ev.count1>0&&(
+                      <div style={{display:"flex",justifyContent:"space-between",background:"#fff7ed",borderRadius:8,padding:"8px 12px"}}>
+                        <span style={{fontSize:13,color:"#64748b"}}>1本目　¥{(ev.price1??0).toLocaleString()} × {ev.count1}人</span>
+                        <span style={{fontSize:13,fontWeight:700,color:"#f97316",fontFamily:"'DM Mono',monospace"}}>¥{((ev.price1??0)*(ev.count1??0)).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {ev.count2>0&&(
+                      <div style={{display:"flex",justifyContent:"space-between",background:"#fff7ed",borderRadius:8,padding:"8px 12px"}}>
+                        <span style={{fontSize:13,color:"#64748b"}}>2本目　¥{(ev.price2??0).toLocaleString()} × {ev.count2}人</span>
+                        <span style={{fontSize:13,fontWeight:700,color:"#f97316",fontFamily:"'DM Mono',monospace"}}>¥{((ev.price2??0)*(ev.count2??0)).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {ev.hasSet&&ev.setCount>0&&(
+                      <div style={{display:"flex",justifyContent:"space-between",background:"#fef2f2",borderRadius:8,padding:"8px 12px"}}>
+                        <span style={{fontSize:13,color:"#64748b"}}>セット　¥{(ev.setPrice??0).toLocaleString()} × {ev.setCount}人</span>
+                        <span style={{fontSize:13,fontWeight:700,color:"#ef4444",fontFamily:"'DM Mono',monospace"}}>¥{((ev.setPrice??0)*(ev.setCount??0)).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {ev.note&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{ev.note}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* ══ LESSONS ══ */}
         {tab==="lessons"&&(
           <div>
@@ -1282,7 +1400,7 @@ JSONの形式:
           <div>
             <div style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
               <div style={{fontSize:16,fontWeight:700,color:"#64748b",marginBottom:16}}>📊 収入内訳</div>
-              {[...Object.entries(CATEGORIES).map(([key,cat])=>[cat.label,key==="sub"?subsIncome:lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),["サブスク",subIncome,"#10b981"],["物販",merchIncome,"#ec4899"],["スポット",spotIncome,"#64748b"]].filter(([,v])=>v>0).map(([l,v,c])=>{
+              {[...Object.entries(CATEGORIES).map(([key,cat])=>[cat.label,key==="sub"?subsIncome:lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),["サブスク",subIncome,"#10b981"],["物販",merchIncome,"#ec4899"],["イベント",eventIncome,"#f97316"],["スポット",spotIncome,"#64748b"]].filter(([,v])=>v>0).map(([l,v,c])=>{
                 const pct=totalIncome>0?v/totalIncome*100:0;
                 return <div key={l} style={{marginBottom:12}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12}}>{l}</span><span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:c}}>¥{v.toLocaleString()} <span style={{color:"#94a3b8",fontSize:10}}>({pct.toFixed(0)}%)</span></span></div><div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:`${pct}%`,background:c,borderRadius:4}}/></div></div>;
               })}
@@ -1549,6 +1667,116 @@ JSONの形式:
           {(lForm.transportPer!=="none")&&<LInput type="number" value={lForm.transport||""} onChange={v=>setLForm(f=>({...f,transport:v}))} placeholder="例：500"/>}
           <button onClick={savePart} style={{width:"100%",padding:16,borderRadius:12,border:"none",background:"linear-gradient(135deg,#f97316,#f59e0b)",color:"white",fontWeight:700,fontSize:17,cursor:"pointer",...F}}>
             {editPart?"更新する":"追加する"}
+          </button>
+        </Modal>
+      )}
+
+      {/* イベント登録モーダル */}
+      {showAddEvent&&(
+        <Modal onClose={()=>{setShowAddEvent(false);setEditEvent(null);setEventForm(blankEvent);}} title={editEvent?"✏️ イベントを編集":"🎪 イベントを追加"} color="#f97316">
+          <Label>イベント名</Label>
+          <LInput value={eventForm.name} onChange={v=>setEventForm(f=>({...f,name:v}))} placeholder="例：江津湖フィットネスフェス"/>
+          <Label>日付</Label>
+          <LInput type="date" value={eventForm.date} onChange={v=>setEventForm(f=>({...f,date:v}))}/>
+          <Label>場所（任意）</Label>
+          <LInput value={eventForm.place||""} onChange={v=>setEventForm(f=>({...f,place:v}))} placeholder="例：江津湖公園"/>
+
+          <div style={{height:1,background:"#f1f5f9",margin:"4px 0 16px"}}/>
+          <div style={{fontSize:14,fontWeight:700,color:"#f97316",marginBottom:12}}>💰 料金・参加人数</div>
+
+          {/* 1本目 */}
+          <div style={{background:"#fff7ed",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fed7aa"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#f97316",marginBottom:10}}>1本目</div>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>参加費（円）</div>
+                <input type="number" value={eventForm.price1||""} onChange={e=>setEventForm(f=>({...f,price1:e.target.value}))} placeholder="例：1500"
+                  style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #fed7aa",fontSize:15,fontFamily:"'DM Mono',monospace",color:"#f97316",fontWeight:700,boxSizing:"border-box",outline:"none"}}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>参加人数</div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <button onClick={()=>setEventForm(f=>({...f,count1:Math.max(0,(Number(f.count1)||0)-1)}))} style={{...cBtn,width:36,height:36,fontSize:20}}>－</button>
+                  <span style={{fontSize:18,fontWeight:700,minWidth:32,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#f97316"}}>{eventForm.count1||0}</span>
+                  <button onClick={()=>setEventForm(f=>({...f,count1:(Number(f.count1)||0)+1}))} style={{...cBtn,width:36,height:36,fontSize:20}}>＋</button>
+                </div>
+              </div>
+            </div>
+            {(Number(eventForm.price1)||0)>0&&(Number(eventForm.count1)||0)>0&&(
+              <div style={{fontSize:12,color:"#f97316",fontWeight:700,textAlign:"right"}}>小計 ¥{((Number(eventForm.price1)||0)*(Number(eventForm.count1)||0)).toLocaleString()}</div>
+            )}
+          </div>
+
+          {/* 2本目 */}
+          <div style={{background:"#fff7ed",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fed7aa"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#f97316",marginBottom:10}}>2本目（任意）</div>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>参加費（円）</div>
+                <input type="number" value={eventForm.price2||""} onChange={e=>setEventForm(f=>({...f,price2:e.target.value}))} placeholder="例：2000"
+                  style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #fed7aa",fontSize:15,fontFamily:"'DM Mono',monospace",color:"#f97316",fontWeight:700,boxSizing:"border-box",outline:"none"}}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>参加人数</div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <button onClick={()=>setEventForm(f=>({...f,count2:Math.max(0,(Number(f.count2)||0)-1)}))} style={{...cBtn,width:36,height:36,fontSize:20}}>－</button>
+                  <span style={{fontSize:18,fontWeight:700,minWidth:32,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#f97316"}}>{eventForm.count2||0}</span>
+                  <button onClick={()=>setEventForm(f=>({...f,count2:(Number(f.count2)||0)+1}))} style={{...cBtn,width:36,height:36,fontSize:20}}>＋</button>
+                </div>
+              </div>
+            </div>
+            {(Number(eventForm.price2)||0)>0&&(Number(eventForm.count2)||0)>0&&(
+              <div style={{fontSize:12,color:"#f97316",fontWeight:700,textAlign:"right"}}>小計 ¥{((Number(eventForm.price2)||0)*(Number(eventForm.count2)||0)).toLocaleString()}</div>
+            )}
+          </div>
+
+          {/* セット料金 */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <span style={{fontSize:14,color:"#64748b",fontWeight:600}}>セット料金あり</span>
+            <button onClick={()=>setEventForm(f=>({...f,hasSet:!f.hasSet}))}
+              style={{width:48,height:26,borderRadius:13,background:eventForm.hasSet?"#ef4444":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+              <div style={{width:20,height:20,borderRadius:"50%",background:"white",position:"absolute",top:3,left:eventForm.hasSet?25:3,transition:"left 0.2s"}}/>
+            </button>
+          </div>
+          {eventForm.hasSet&&(
+            <div style={{background:"#fef2f2",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fecaca"}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#ef4444",marginBottom:10}}>セット（1本目＋2本目）</div>
+              <div style={{display:"flex",gap:8,marginBottom:8}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>セット料金（円）</div>
+                  <input type="number" value={eventForm.setPrice||""} onChange={e=>setEventForm(f=>({...f,setPrice:e.target.value}))} placeholder="例：3000"
+                    style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:15,fontFamily:"'DM Mono',monospace",color:"#ef4444",fontWeight:700,boxSizing:"border-box",outline:"none"}}/>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>人数</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <button onClick={()=>setEventForm(f=>({...f,setCount:Math.max(0,(Number(f.setCount)||0)-1)}))} style={{...cBtn,width:36,height:36,fontSize:20}}>－</button>
+                    <span style={{fontSize:18,fontWeight:700,minWidth:32,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#ef4444"}}>{eventForm.setCount||0}</span>
+                    <button onClick={()=>setEventForm(f=>({...f,setCount:(Number(f.setCount)||0)+1}))} style={{...cBtn,width:36,height:36,fontSize:20}}>＋</button>
+                  </div>
+                </div>
+              </div>
+              {(Number(eventForm.setPrice)||0)>0&&(Number(eventForm.setCount)||0)>0&&(
+                <div style={{fontSize:12,color:"#ef4444",fontWeight:700,textAlign:"right"}}>小計 ¥{((Number(eventForm.setPrice)||0)*(Number(eventForm.setCount)||0)).toLocaleString()}</div>
+              )}
+            </div>
+          )}
+
+          {/* 合計プレビュー */}
+          {((Number(eventForm.price1)||0)*(Number(eventForm.count1)||0)+(Number(eventForm.price2)||0)*(Number(eventForm.count2)||0)+(eventForm.hasSet?(Number(eventForm.setPrice)||0)*(Number(eventForm.setCount)||0):0))>0&&(
+            <div style={{background:"linear-gradient(135deg,#f97316,#ef4444)",borderRadius:12,padding:"12px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:13,color:"white",fontWeight:700}}>🎪 合計収入</span>
+              <span style={{fontSize:22,fontWeight:700,color:"white",fontFamily:"'DM Mono',monospace"}}>
+                ¥{((Number(eventForm.price1)||0)*(Number(eventForm.count1)||0)+(Number(eventForm.price2)||0)*(Number(eventForm.count2)||0)+(eventForm.hasSet?(Number(eventForm.setPrice)||0)*(Number(eventForm.setCount)||0):0)).toLocaleString()}
+              </span>
+            </div>
+          )}
+
+          <Label>メモ（任意）</Label>
+          <LInput value={eventForm.note||""} onChange={v=>setEventForm(f=>({...f,note:v}))} placeholder="例：外部インストラクター招待"/>
+          <button onClick={saveEvent} disabled={!eventForm.name||!eventForm.date}
+            style={{width:"100%",padding:16,borderRadius:12,border:"none",background:eventForm.name&&eventForm.date?"linear-gradient(135deg,#f97316,#ef4444)":"#e2e8f0",color:eventForm.name&&eventForm.date?"white":"#94a3b8",fontWeight:700,fontSize:17,cursor:eventForm.name&&eventForm.date?"pointer":"not-allowed",...F}}>
+            {editEvent?"更新する":"追加する"}
           </button>
         </Modal>
       )}
