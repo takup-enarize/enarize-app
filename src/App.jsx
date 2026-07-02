@@ -107,6 +107,7 @@ export default function App() {
   const [allLogs,     setAllLogs]     = useState(() => load("en3_logs",     {}));
   const [allExpenses, setAllExpenses] = useState(() => load("en3_expenses", {}));
   const [allSpots,    setAllSpots]    = useState(() => load("en3_spots",    {}));
+  const [allSubs,     setAllSubs]     = useState(() => load("en3_subs",     {}));
 
   const [merch,       setMerchRaw]    = useState(() => load("en3_merch",    []));
   const [allMerchLogs,setAllMerchLogs]= useState(() => load("en3_merch_logs", {}));
@@ -115,6 +116,7 @@ export default function App() {
   const logs     = allLogs[mk]     ?? {};
   const expenses = allExpenses[mk] ?? [];
   const spots    = allSpots[mk]    ?? [];
+  const subs     = allSubs[mk]     ?? [];
   const merchLogs= allMerchLogs[mk] ?? [];
   const events   = allEvents[mk]   ?? [];
 
@@ -123,6 +125,7 @@ export default function App() {
   const setLogs      = useCallback(fn => setAllLogs(p      => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??{}):fn}; save("en3_logs",n); return n; }), [mk]);
   const setExpenses  = useCallback(fn => setAllExpenses(p  => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_expenses",n); return n; }), [mk]);
   const setSpots     = useCallback(fn => setAllSpots(p     => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_spots",n); return n; }), [mk]);
+  const setSubs      = useCallback(fn => setAllSubs(p      => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_subs",n); return n; }), [mk]);
   const setMerchLogs = useCallback(fn => setAllMerchLogs(p => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_merch_logs",n); return n; }), [mk]);
   const setEvents    = useCallback(fn => setAllEvents(p    => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_events",n);     return n; }), [mk]);
   const setMerch     = (v) => { setMerchRaw(v); save("en3_merch", v); };
