@@ -845,6 +845,16 @@ JSONの形式:
                 flash();
               };
 
+              const actualDow = l.day === undefined ? 1 : (l.day === 6 ? 0 : l.day + 1);
+              const sessionDates = (() => {
+                const dates = [];
+                const lastDay = new Date(calYear, calMonth, 0).getDate();
+                for (let d = 1; d <= lastDay; d++) {
+                  if (new Date(calYear, calMonth-1, d).getDay() === actualDow) dates.push(d);
+                }
+                return dates;
+              })();
+
               return (
                 <div key={l.id} style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
@@ -856,7 +866,7 @@ JSONの形式:
                   </div>
                   {sessions.map((people, si)=>(
                     <div key={si} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
-                      <div style={{fontSize:14,color:"#94a3b8",minWidth:50}}>{si+1}回目</div>
+                      <div style={{fontSize:14,color:"#94a3b8",minWidth:50}}>{sessionDates[si] ? `${calMonth}/${sessionDates[si]}` : `${si+1}回目`}</div>
                       <button onClick={()=>updatePeople(si,-1)} style={cBtn}>－</button>
                       <span style={{fontSize:20,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>{people}</span>
                       <button onClick={()=>updatePeople(si,+1)} style={cBtn}>＋</button>
