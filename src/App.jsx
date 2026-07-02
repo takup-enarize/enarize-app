@@ -107,8 +107,6 @@ export default function App() {
   const [allLogs,     setAllLogs]     = useState(() => load("en3_logs",     {}));
   const [allExpenses, setAllExpenses] = useState(() => load("en3_expenses", {}));
   const [allSpots,    setAllSpots]    = useState(() => load("en3_spots",    {}));
-  const [allSubs,     setAllSubs]     = useState(() => load("en3_subs",     {}));
-  const [subSettings, setSubSettingsRaw] = useState(() => load("en3_sub_settings", { serviceName:"", normalPrice:1500, vipPrice:1000, normalCount:0, vipCount:0 }));
 
   const [merch,       setMerchRaw]    = useState(() => load("en3_merch",    []));
   const [allMerchLogs,setAllMerchLogs]= useState(() => load("en3_merch_logs", {}));
@@ -117,7 +115,6 @@ export default function App() {
   const logs     = allLogs[mk]     ?? {};
   const expenses = allExpenses[mk] ?? [];
   const spots    = allSpots[mk]    ?? [];
-  const subs     = allSubs[mk]     ?? [];
   const merchLogs= allMerchLogs[mk] ?? [];
   const events   = allEvents[mk]   ?? [];
 
@@ -126,11 +123,9 @@ export default function App() {
   const setLogs      = useCallback(fn => setAllLogs(p      => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??{}):fn}; save("en3_logs",n); return n; }), [mk]);
   const setExpenses  = useCallback(fn => setAllExpenses(p  => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_expenses",n); return n; }), [mk]);
   const setSpots     = useCallback(fn => setAllSpots(p     => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_spots",n); return n; }), [mk]);
-  const setSubs      = useCallback(fn => setAllSubs(p      => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_subs",n); return n; }), [mk]);
   const setMerchLogs = useCallback(fn => setAllMerchLogs(p => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_merch_logs",n); return n; }), [mk]);
   const setEvents    = useCallback(fn => setAllEvents(p    => { const n={...p,[mk]:typeof fn==="function"?fn(p[mk]??[]):fn}; save("en3_events",n);     return n; }), [mk]);
   const setMerch     = (v) => { setMerchRaw(v); save("en3_merch", v); };
-  const setSubSettings = v => { const next = typeof v === "function" ? v(subSettings) : v; setSubSettingsRaw(next); save("en3_sub_settings", next); };
 
   useEffect(() => { save("en3_lessons",   lessons);   }, [lessons]);
   useEffect(() => { save("en3_paygroups", payGroups); }, [payGroups]);
@@ -210,7 +205,6 @@ export default function App() {
     }, 0);
   }, [merchLogs, merch]);
 
-  const subsIncome   = subs.reduce((s,e) => s + (e.fee ?? 0), 0);
   const eventIncome  = events.reduce((s,ev) => {
     const single1 = (ev.price1??0) * (ev.count1??0);
     const single2 = (ev.price2??0) * (ev.count2??0);
@@ -218,9 +212,8 @@ export default function App() {
     return s + single1 + single2 + setIncome;
   }, 0);
   const totalLessonIncome = useMemo(() => lessons.reduce((s,l) => s + lessonIncome(l), 0), [lessons, logs]);
-  const subIncome    = (subSettings.normalCount ?? 0) * (subSettings.normalPrice ?? 1500) + (subSettings.vipCount ?? 0) * (subSettings.vipPrice ?? 1000);
   const spotIncome   = spots.reduce((s,e) => s + e.amount, 0);
-  const totalIncome  = totalLessonIncome + subIncome + spotIncome + subsIncome + merchIncome + eventIncome;
+  const totalIncome  = totalLessonIncome + spotIncome + merchIncome + eventIncome;
   const totalExpenses= expenses.reduce((s,e) => s + Number(e.amount), 0);
   const netIncome    = totalIncome - totalExpenses;
 
@@ -553,12 +546,11 @@ JSONの形式:
             </div>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {Object.entries(CATEGORIES).map(([key,cat])=>{
-              const inc = key==="sub" ? subsIncome : lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0);
+            {Object.entries(CATEGORIES).filter(([key])=>key!=="sub").map(([key,cat])=>{
+              const inc = lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0);
               if(!inc) return null;
               return <div key={key} style={{background:cat.color+"12",borderRadius:8,padding:"5px 10px",border:`1px solid ${cat.color}25`}}><span style={{fontSize:13,color:cat.color,fontWeight:700}}>{cat.icon} {cat.label}</span><span style={{fontSize:13,fontFamily:"'DM Mono',monospace",color:cat.color,marginLeft:6}}>¥{inc.toLocaleString()}</span></div>;
             })}
-            {subIncome>0&&<div style={{background:"#10b98112",borderRadius:8,padding:"5px 10px",border:"1px solid #10b98125"}}><span style={{fontSize:10,color:"#10b981",fontWeight:700}}>📱 {subSettings.serviceName||"サブスク"}</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#10b981",marginLeft:6}}>¥{subIncome.toLocaleString()}</span></div>}
             {merchIncome>0&&<div style={{background:"#ec489912",borderRadius:8,padding:"5px 10px",border:"1px solid #ec489925"}}><span style={{fontSize:13,color:"#ec4899",fontWeight:700}}>🛍️ 物販</span><span style={{fontSize:13,fontFamily:"'DM Mono',monospace",color:"#ec4899",marginLeft:6}}>¥{merchIncome.toLocaleString()}</span></div>}
           </div>
         </div>
@@ -883,60 +875,7 @@ JSONの形式:
             })}
             {lessons.filter(l=>l.category==="circle").length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0",fontSize:15}}><div style={{fontSize:36,marginBottom:8}}>👥</div>⚙️ レッスン管理からサークルを追加してね</div>}
 
-            <div style={{background:"white",borderRadius:16,padding:16,marginTop:12,boxShadow:"0 2px 12px #00000012",border:`1px ${subSettings.serviceName?"solid":"dashed"} #10b98140`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div><div style={{fontSize:14,fontWeight:700}}>📱 {subSettings.serviceName||"サブスクサービス"}</div><div style={{fontSize:11,color:"#94a3b8"}}>通常¥{(subSettings.normalPrice??1500).toLocaleString()} / 👑¥{(subSettings.vipPrice??1000).toLocaleString()}</div></div>
-                <div style={{fontSize:18,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>¥{subIncome.toLocaleString()}</div>
-              </div>
-              {/* サービス名 */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:12,color:"#10b981",fontWeight:700,marginBottom:6}}>サービス名</div>
-                <input
-                  type="text"
-                  value={subSettings.serviceName||""}
-                  onChange={e=>setSubSettings(s=>({...s,serviceName:e.target.value}))}
-                  placeholder="例：マンツーマンレッスン月額プラン"
-                  style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #bbf7d0",background:"#f0fdf4",fontSize:15,fontWeight:700,color:"#1e293b",boxSizing:"border-box",...F,outline:"none"}}
-                />
-              </div>
-              {/* 単価設定 */}
-              <div style={{display:"flex",gap:8,marginBottom:12}}>
-                <div style={{flex:1,background:"#f0fdf4",borderRadius:10,padding:"10px 12px",border:"1px solid #bbf7d0"}}>
-                  <div style={{fontSize:11,color:"#10b981",fontWeight:700,marginBottom:6}}>通常単価</div>
-                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <span style={{fontSize:12,color:"#64748b"}}>¥</span>
-                    <input type="number" value={subSettings.normalPrice??1500} onChange={e=>setSubSettings(s=>({...s,normalPrice:Number(e.target.value)||0}))}
-                      style={{width:"100%",padding:"6px 8px",borderRadius:8,border:"1px solid #bbf7d0",fontSize:16,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace",textAlign:"right",...F}}/>
-                  </div>
-                </div>
-                <div style={{flex:1,background:"#fdf4ff",borderRadius:10,padding:"10px 12px",border:"1px solid #e9d5ff"}}>
-                  <div style={{fontSize:11,color:"#a855f7",fontWeight:700,marginBottom:6}}>👑 お得意様単価</div>
-                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <span style={{fontSize:12,color:"#64748b"}}>¥</span>
-                    <input type="number" value={subSettings.vipPrice??1000} onChange={e=>setSubSettings(s=>({...s,vipPrice:Number(e.target.value)||0}))}
-                      style={{width:"100%",padding:"6px 8px",borderRadius:8,border:"1px solid #e9d5ff",fontSize:16,fontWeight:700,color:"#a855f7",fontFamily:"'DM Mono',monospace",textAlign:"right",...F}}/>
-                  </div>
-                </div>
-              </div>
-              {/* 通常人数 */}
-              <div style={{display:"flex",alignItems:"center",gap:12,background:"#f0fdf4",borderRadius:10,padding:"10px 12px",marginBottom:8,border:"1px solid #bbf7d0"}}>
-                <span style={{fontSize:12,color:"#10b981",fontWeight:700,minWidth:60}}>通常</span>
-                <button onClick={()=>setSubSettings(s=>({...s,normalCount:Math.max(0,(s.normalCount??0)-1)}))} style={cBtn}>－</button>
-                <span style={{fontSize:22,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#10b981"}}>{subSettings.normalCount??0}</span>
-                <button onClick={()=>setSubSettings(s=>({...s,normalCount:(s.normalCount??0)+1}))} style={cBtn}>＋</button>
-                <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
-                <span style={{marginLeft:"auto",fontSize:14,fontWeight:700,color:"#10b981",fontFamily:"'DM Mono',monospace"}}>¥{((subSettings.normalCount??0)*(subSettings.normalPrice??1500)).toLocaleString()}</span>
-              </div>
-              {/* お得意様人数 */}
-              <div style={{display:"flex",alignItems:"center",gap:12,background:"#fdf4ff",borderRadius:10,padding:"10px 12px",border:"1px solid #e9d5ff"}}>
-                <span style={{fontSize:12,color:"#a855f7",fontWeight:700,minWidth:60}}>👑 お得意様</span>
-                <button onClick={()=>setSubSettings(s=>({...s,vipCount:Math.max(0,(s.vipCount??0)-1)}))} style={cBtn}>－</button>
-                <span style={{fontSize:22,fontWeight:700,minWidth:40,textAlign:"center",fontFamily:"'DM Mono',monospace",color:"#a855f7"}}>{subSettings.vipCount??0}</span>
-                <button onClick={()=>setSubSettings(s=>({...s,vipCount:(s.vipCount??0)+1}))} style={cBtn}>＋</button>
-                <span style={{fontSize:12,color:"#94a3b8"}}>人</span>
-                <span style={{marginLeft:"auto",fontSize:14,fontWeight:700,color:"#a855f7",fontFamily:"'DM Mono',monospace"}}>¥{((subSettings.vipCount??0)*(subSettings.vipPrice??1000)).toLocaleString()}</span>
-              </div>
-            </div>
+
           </div>
         )}
 
@@ -1410,7 +1349,7 @@ JSONの形式:
           <div>
             <div style={{background:"white",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px #00000012"}}>
               <div style={{fontSize:16,fontWeight:700,color:"#64748b",marginBottom:16}}>📊 収入内訳</div>
-              {[...Object.entries(CATEGORIES).map(([key,cat])=>[cat.label,key==="sub"?subsIncome:lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),["サブスク",subIncome,"#10b981"],["物販",merchIncome,"#ec4899"],["イベント",eventIncome,"#f97316"],["スポット",spotIncome,"#64748b"]].filter(([,v])=>v>0).map(([l,v,c])=>{
+              {[...Object.entries(CATEGORIES).filter(([key])=>key!=="sub").map(([key,cat])=>[cat.label,lessons.filter(l=>l.category===key).reduce((s,l)=>s+lessonIncome(l),0),cat.color]),["物販",merchIncome,"#ec4899"],["イベント",eventIncome,"#f97316"],["スポット",spotIncome,"#64748b"]].filter(([,v])=>v>0).map(([l,v,c])=>{
                 const pct=totalIncome>0?v/totalIncome*100:0;
                 return <div key={l} style={{marginBottom:12}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12}}>{l}</span><span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:c}}>¥{v.toLocaleString()} <span style={{color:"#94a3b8",fontSize:10}}>({pct.toFixed(0)}%)</span></span></div><div style={{height:8,background:"#f1f5f9",borderRadius:4}}><div style={{height:"100%",width:`${pct}%`,background:c,borderRadius:4}}/></div></div>;
               })}
