@@ -807,11 +807,20 @@ JSONの形式:
             )}
 
             <div style={{fontSize:15,color:"#64748b",marginBottom:14,fontWeight:600}}>🏃 サークル・人数入力</div>
-            {lessons.filter(l=>l.category==="circle").map(l=>{
+            {lessons.filter(l=>{
+              if (l.category!=="circle") return false;
+              // ★ 日付指定サークルは該当月のみ表示
+              if (l.specificDate) {
+                const [y,m] = l.specificDate.split("-").map(Number);
+                if (y !== calYear || m !== calMonth) return false;
+              }
+              return true;
+            }).map(l=>{
               const cat = CATEGORIES[l.category];
               // ★ 常にlogsから最新状態を取得
               const curLog = logs[l.id] ?? { count: defaultCount(l.freq), active:true, skipDates:[], peopleSessions:[], people: l.defaultPeople??10 };
-              const sessionCount = curLog.count ?? defaultCount(l.freq);
+              // ★ 日付指定サークルは常に1回のみ（曜日一致で自動加算しない）
+              const sessionCount = l.specificDate ? 1 : (curLog.count ?? defaultCount(l.freq));
               // ★ セッション配列：長さをsessionCountに合わせ、値はpeopleSessions優先、なければdefaultPeople
               const sessions = Array.from({length: sessionCount}, (_, i) =>
                 (curLog.peopleSessions ?? [])[i] ?? (l.defaultPeople ?? 10)
@@ -842,6 +851,11 @@ JSONの形式:
 
               const actualDow = l.day === undefined ? 1 : (l.day === 6 ? 0 : l.day + 1);
               const sessionDates = (() => {
+                // ★ 日付指定サークルは指定日のみ
+                if (l.specificDate) {
+                  const [,,dStr] = l.specificDate.split("-");
+                  return [Number(dStr)];
+                }
                 const dates = [];
                 const lastDay = new Date(calYear, calMonth, 0).getDate();
                 for (let d = 1; d <= lastDay; d++) {
@@ -869,10 +883,12 @@ JSONの形式:
                       <span style={{fontSize:14,fontWeight:700,color:cat.color,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}}>¥{(people*(l.unitPrice??0)).toLocaleString()}</span>
                     </div>
                   ))}
-                  <div style={{display:"flex",gap:8,marginTop:4}}>
-                    <button onClick={()=>updateCount(-1)} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 －</button>
-                    <button onClick={()=>updateCount(+1)} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 ＋</button>
-                  </div>
+                  {!l.specificDate&&(
+                    <div style={{display:"flex",gap:8,marginTop:4}}>
+                      <button onClick={()=>updateCount(-1)} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 －</button>
+                      <button onClick={()=>updateCount(+1)} style={{flex:1,padding:"10px",borderRadius:8,border:`1px dashed ${cat.color}60`,background:`${cat.color}08`,color:cat.color,fontSize:14,cursor:"pointer",...F}}>回数 ＋</button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1399,11 +1415,11 @@ JSONの形式:
           <TimePicker label="開始時間" value={lForm.startTime} onChange={v=>setLForm(f=>({...f,startTime:v}))}/>
           <TimePicker label="終了時間" value={lForm.endTime} onChange={v=>setLForm(f=>({...f,endTime:v}))}/>
 
-          {lForm.category==="event"&&(
+          {(lForm.category==="event"||lForm.category==="circle")&&(
             <>
               <Label>📅 日付指定（特定の日だけ）</Label>
               <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
-                <button onClick={()=>setLForm(f=>({...f,specificDate:f.specificDate?"":""}))}
+                <button
                   style={{width:48,height:26,borderRadius:13,background:lForm.specificDate?"#ef4444":"#e2e8f0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}
                   onClick={()=>setLForm(f=>({...f,specificDate:f.specificDate?"":(`${calYear}-${String(calMonth).padStart(2,"0")}-01`)}))}>
                   <div style={{width:20,height:20,borderRadius:"50%",background:"white",position:"absolute",top:3,left:lForm.specificDate?25:3,transition:"left 0.2s"}}/>
@@ -1627,7 +1643,7 @@ JSONの形式:
       {showAddEvent&&(
         <Modal onClose={()=>{setShowAddEvent(false);setEditEvent(null);setEventForm(blankEvent);}} title={editEvent?"✏️ イベントを編集":"🎪 イベントを追加"} color="#f97316">
           <Label>イベント名</Label>
-          <LInput value={eventForm.name} onChange={v=>setEventForm(f=>({...f,name:v}))} placeholder="例：江津湖フィットネスフェス"/>
+          <LInput value={eventForm.name} onChange={v=>setEventForm(f=>({...f,name:v}))} placeholder="例：フィットネスイベント"/>
           <Label>日付</Label>
           <LInput type="date" value={eventForm.date} onChange={v=>setEventForm(f=>({...f,date:v}))}/>
           <Label>場所（任意）</Label>
